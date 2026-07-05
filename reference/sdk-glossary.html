@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SDK 术语表</title>
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+  dt { font-weight: 600; margin-top: 1rem; }
+  dd { margin-left: 0; color: var(--text-muted); font-size: 0.92rem; }
+  .avoid { color: var(--danger); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-header"><a href="deployment-glossary.html">📖 课程导航</a></div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">网站部署</div>
+    <ul class="sidebar-links">
+      <li><a href="../lessons/0002-deployment-overview.html">🌐 第1课 部署全景</a></li>
+      <li><a href="../lessons/0007-local-vm.html">🖥️ 第2课 本地虚拟机</a></li>
+      <li><a href="../lessons/0003-traditional-deployment.html">🖥️ 第3课 手工部署</a></li>
+      <li><a href="../lessons/0004-docker-deployment.html">🐳 第4课 Docker</a></li>
+      <li><a href="../lessons/0005-cicd-automation.html">⚙️ 第5课 CI/CD</a></li>
+      <li><a href="../lessons/0006-production-security.html">🔒 第6课 安全运维</a></li>
+    </ul>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">参考 &amp; 旧课</div>
+    <ul class="sidebar-links">
+      <li><a href="deployment-glossary.html">📝 部署术语表</a></li>
+      <li><a href="../lessons/0001-what-is-sdk.html">📦 SDK 入门</a></li>
+      <li><a href="sdk-glossary.html" class="active">📝 SDK 术语表</a></li>
+    </ul>
+  </div>
+</nav>
+
+<h1>📝 SDK 术语表</h1>
+<p style="color: var(--text-muted);">此术语表会随着学习进度不断更新。术语仅在理解后收录。</p>
+
+<h2>核心概念</h2>
+
+<dl>
+  <dt>SDK（Software Development Kit）</dt>
+  <dd>一套帮助开发者快速接入某个平台或服务的<strong>工具箱</strong>，包含代码库、文档、示例和辅助工具。它把复杂细节封装起来，暴露简洁的调用接口。</dd>
+
+  <dt>API（Application Programming Interface）</dt>
+  <dd>两个软件之间通信的<strong>接口规范</strong>——定义了你"能请求什么"和"会收到什么"。API 是规则，不是代码。</dd>
+
+  <dt>Library（库）</dt>
+  <dd>解决某一类问题的<strong>代码集合</strong>，你主动调用它来完成任务。范围通常比 SDK 小、不限定特定平台。<br>
+    <span class="avoid">避免：插件、扩展包</span></dd>
+
+  <dt>Framework（框架）</dt>
+  <dd>定义好骨架和规则的<strong>应用程序结构</strong>。你调用框架提供的能力，但框架控制整体流程（控制反转）。<br>
+    <span class="avoid">避免：大号库、架构</span></dd>
+
+  <dt>控制反转（Inversion of Control, IoC）</dt>
+  <dd>Framework 区别于 Library 的核心特征——不是你调用框架，而是<strong>框架在特定时机调用你的代码</strong>。就像填空题：框架是试卷，你填答案。</dd>
+</dl>
+
+<h2>SDK 内部构成</h2>
+
+<dl>
+  <dt>代码封装层</dt>
+  <dd>SDK 中对 API 的包装代码——帮你处理认证、加密、序列化、重试等繁琐细节。</dd>
+
+  <dt>CLI 工具</dt>
+  <dd>SDK 可能附带的命令行工具，让你在终端里就能管理资源、调试问题。</dd>
+
+  <dt>Sandbox / 沙箱</dt>
+  <dd>SDK 提供的测试环境，你在里面操作不会影响真实数据——相当于"演习模式"。</dd>
+</dl>
+
+<div class="lesson-footer">
+  <p>最后更新：2026-07-02 &nbsp;|&nbsp; <a href="../lessons/0001-what-is-sdk.html">← 回到第一课</a></p>
+</div>
+
+</body>
+</html>

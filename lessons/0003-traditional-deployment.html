@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第二课：传统云服务器手工部署</title>
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+  .step-box { border-left: 3px solid var(--accent); padding: 0.5rem 0 0.5rem 1.25rem; margin: 1.5rem 0; }
+  .step-box h3 { margin: 0 0 0.5rem; color: var(--accent); }
+  .cmd-block { background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem; border-radius: var(--radius); overflow-x: auto; margin: 0.75rem 0; font-size: 0.88rem; line-height: 1.6; }
+  .cmd-block code { background: none; padding: 0; color: inherit; }
+  .cmd-comment { color: #6c7086; }
+  .pitfall { background: #fef2f2; border: 1px solid #fca5a5; border-radius: var(--radius); padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.92rem; }
+  .pitfall strong { color: var(--danger); }
+  .checklist { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 1rem 0; }
+  .checklist li { margin-bottom: 0.4rem; }
+  .config-sample { background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem; border-radius: var(--radius); overflow-x: auto; margin: 0.75rem 0; font-size: 0.85rem; line-height: 1.5; }
+  .config-sample .comment { color: #6c7086; }
+  .config-sample .key { color: #89b4fa; }
+  .config-sample .val { color: #a6e3a1; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-header"><a href="../reference/deployment-glossary.html">📖 课程导航</a></div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">网站部署</div>
+    <ul class="sidebar-links">
+      <li><a href="0002-deployment-overview.html">🌐 第1课 部署全景</a></li>
+      <li><a href="0007-local-vm.html">🖥️ 第2课 本地虚拟机</a></li>
+      <li><a href="0003-traditional-deployment.html" class="active">🖥️ 第3课 手工部署</a></li>
+      <li><a href="0004-docker-deployment.html">🐳 第4课 Docker</a></li>
+      <li><a href="0005-cicd-automation.html">⚙️ 第5课 CI/CD</a></li>
+      <li><a href="0006-production-security.html">🔒 第6课 安全运维</a></li>
+    </ul>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">参考 &amp; 旧课</div>
+    <ul class="sidebar-links">
+      <li><a href="../reference/deployment-glossary.html">📝 部署术语表</a></li>
+      <li><a href="0001-what-is-sdk.html">📦 SDK 入门</a></li>
+      <li><a href="../reference/sdk-glossary.html">📝 SDK 术语表</a></li>
+    </ul>
+  </div>
+</nav>
+
+<h1>🖥️ 第二课：传统云服务器手工部署</h1>
+<p style="color: var(--text-muted); font-size: 0.95rem;">预计阅读时间：15 分钟 &nbsp;|&nbsp; 难度：入门 ⭐⭐</p>
+
+<div class="card" style="background: #fefce8; border-color: #facc15;">
+  <strong>📋 本课目标：</strong>亲手走完一套完整的手工部署流程——从一台"光杆"云服务器，到跑着 HTTPS 的线上 Web 应用。这堂课是部署入门的"核心肌肉训练"，理解它能帮你更好地理解后面容器化和 CI/CD 的意义。
+</div>
+
+<h2><span class="section-num">1</span> 准备工作</h2>
+
+<p>你需要以下材料：</p>
+<ul style="margin-left:1.5rem;margin-bottom:1rem;">
+  <li>一台云服务器（推荐 1核2G，Ubuntu 22.04 LTS）—— 阿里云/腾讯云/AWS/华为云</li>
+  <li>一个域名（可选但强烈推荐，没域名也能用 IP 练习到 Nginx 那一步）</li>
+  <li>一个本地 SSH 客户端（Windows 用 Terminal / PowerShell，macOS/Linux 直接终端）</li>
+  <li>一个待部署的应用（我们用一个简单的 Node.js 或静态页面做示例）</li>
+</ul>
+
+<div class="highlight-box">
+  <strong>💡</strong> 没有云服务器？可以用 <a href="https://www.virtualbox.org/" target="_blank">VirtualBox</a> 安装 Ubuntu Server 虚拟机代替。流程一模一样。
+</div>
+
+<h2><span class="section-num">2</span> 第一步：服务器初始化</h2>
+
+<div class="step-box">
+<h3>2.1 创建云服务器并 SSH 登录</h3>
+<p>在云厂商控制台创建实例时注意这几点：</p>
+<ul style="margin-left:1.5rem;margin-bottom:0.75rem;">
+  <li><strong>镜像</strong>：Ubuntu 22.04 LTS（稳定性好、社区支持强）</li>
+  <li><strong>安全组</strong>：创建时先放行 22（SSH）、80（HTTP）、443（HTTPS）端口</li>
+  <li><strong>登录方式</strong>：选择<strong>密钥对</strong>而不是密码（稍后会讲为什么）</li>
+</ul>
+
+<p>拿到服务器公网 IP 后，在本地终端连接：</p>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 方法一：如果你在创建时绑定了密钥对</span><br>
+ssh -i ~/.ssh/my-key.pem ubuntu@你的服务器IP<br><br>
+<span class="cmd-comment"># 方法二：默认的密钥路径（云厂商通常自动注入）</span><br>
+ssh ubuntu@你的服务器IP<br><br>
+<span class="cmd-comment"># 首次登录成功后会看到类似这样的提示</span><br>
+Welcome to Ubuntu 22.04.3 LTS (GNU/Linux 5.15.0-xx-generic x86_64)<br>
+</code>
+</div>
+
+<div class="pitfall">
+  <strong>⚠️ 常见误区：</strong>忘记配置安全组就创建实例。创建后可以在控制台补配，但建议创建时一次性配好。<br>
+  <strong>安全组参考：</strong><a href="https://help.aliyun.com/document_detail/25471.html" target="_blank">阿里云安全组文档</a> | <a href="https://cloud.tencent.com/document/product/215/20089" target="_blank">腾讯云安全组文档</a>
+</div>
+</div>
+
+<div class="step-box">
+<h3>2.2 系统更新与基础组件</h3>
+<p>SSH 连上后，第一件事是更新系统包并安装基础工具：</p>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 更新包索引和已安装的包</span><br>
+sudo apt update && sudo apt upgrade -y<br><br>
+<span class="cmd-comment"># 安装常用工具</span><br>
+sudo apt install -y curl wget git vim ufw<br><br>
+<span class="cmd-comment"># 检查时间是否同步（时区设为 Asia/Shanghai）</span><br>
+sudo timedatectl set-timezone Asia/Shanghai<br>
+timedatectl status<br>
+</code>
+</div>
+</div>
+
+<div class="step-box">
+<h3>2.3 加固 SSH 安全</h3>
+<p>这是<strong>最重要</strong>的一步。服务器暴露在公网上后，几小时内就会有自动脚本扫描并尝试暴力破解 SSH。</p>
+
+<p>如果你没有在创建时绑定密钥对，先手动设置：</p>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 在本地生成 SSH 密钥对（如果还没有）</span><br>
+<span class="cmd-comment"># 本地终端执行，不是服务器上</span><br>
+ssh-keygen -t ed25519 -C "your-email@example.com"<br><br>
+<span class="cmd-comment"># 将公钥复制到服务器</span><br>
+ssh-copy-id ubuntu@你的服务器IP<br>
+<span class="cmd-comment"># 或者手动复制：cat ~/.ssh/id_ed25519.pub | ssh ubuntu@IP "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"</span><br>
+</code>
+</div>
+
+<p>然后修改 SSH 配置禁用密码登录：</p>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 编辑 SSH 配置文件</span><br>
+sudo vim /etc/ssh/sshd_config<br><br>
+<span class="cmd-comment"># 确保以下三个设置正确（去掉前面的 # 注释）</span><br>
+Port 22<span class="cmd-comment">              # 可改为其他端口减少扫描，但不必须</span><br>
+PermitRootLogin no<span class="cmd-comment">       # 禁止 root 直接登录</span><br>
+PasswordAuthentication no<span class="cmd-comment">   # 禁用密码登录</span><br>
+PubkeyAuthentication yes<span class="cmd-comment">    # 启用密钥登录</span><br><br>
+<span class="cmd-comment"># 重启 SSH 服务使配置生效</span><br>
+sudo systemctl restart sshd<br>
+</code>
+</div>
+
+<div class="pitfall">
+  <strong>⚠️ 致命误区：</strong>修改 SSH 配置后没有测试新终端能否登录就关闭了当前会话——如果配置有误，你会把自己锁在门外。<br>
+  <strong>正确做法：</strong>重启 SSH 后，<strong>先开一个新的终端窗口</strong>测试能否 SSH 连上，确认没问题再关当前的。
+</div>
+</div>
+
+<h2><span class="section-num">3</span> 第二步：安装 Web 服务器（Nginx）</h2>
+
+<p>Nginx 是目前最主流的 Web 服务器和反向代理服务器。安装和基本配置：</p>
+
+<div class="step-box">
+<h3>3.1 安装 Nginx</h3>
+<div class="cmd-block">
+<code>sudo apt install -y nginx<br><br>
+<span class="cmd-comment"># 检查 Nginx 版本和服务状态</span><br>
+nginx -v<br>
+sudo systemctl status nginx<br><br>
+<span class="cmd-comment"># 如果防火墙开着，放行 HTTP 和 HTTPS</span><br>
+sudo ufw allow 80/tcp<br>
+sudo ufw allow 443/tcp<br>
+sudo ufw enable<span class="cmd-comment">  # 如果提示确认，输入 y</span><br>
+sudo ufw status<span class="cmd-comment">    # 检查规则列表</span><br>
+</code>
+</div>
+<p>此时在浏览器输入你的服务器 IP，应该能看到"Nginx 欢迎页"——如果看不到，检查安全组是否开放了 80 端口。</p>
+</div>
+
+<div class="step-box">
+<h3>3.2 配置 Nginx 站点</h3>
+<p>Nginx 的站点配置文件在 <code>/etc/nginx/sites-available/</code>，启用则链接到 <code>/etc/nginx/sites-enabled/</code>：</p>
+
+<div class="cmd-block">
+<code><span class="cmd-comment"># 创建一个站点配置</span><br>
+sudo vim /etc/nginx/sites-available/myapp<br>
+</code>
+</div>
+
+<p>一个典型的 Node.js 应用反向代理配置：</p>
+<div class="config-sample">
+<code><span class="comment"># /etc/nginx/sites-available/myapp</span><br><br>
+server {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;listen 80;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;server_name example.com www.example.com;<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;root /var/www/myapp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;index index.html;<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># 前端静态文件</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;location / {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try_files $uri $uri/ /index.html;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># API 反向代理到 Node.js</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;location /api/ {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;proxy_pass http://127.0.0.1:3000;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;proxy_set_header Host $host;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;proxy_set_header X-Real-IP $remote_addr;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;proxy_set_header X-Forwarded-Proto $scheme;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+}</code>
+</div>
+
+<div class="cmd-block">
+<code><span class="cmd-comment"># 创建静态资源目录</span><br>
+sudo mkdir -p /var/www/myapp<br>
+sudo chown -R ubuntu:ubuntu /var/www/myapp<br><br>
+<span class="cmd-comment"># 启用站点（创建软链接）</span><br>
+sudo ln -s /etc/nginx/sites-available/myapp /etc/nginx/sites-enabled/<br><br>
+<span class="cmd-comment"># 测试配置是否正确（重要！）</span><br>
+sudo nginx -t<br><br>
+<span class="cmd-comment"># 重载 Nginx 使配置生效</span><br>
+sudo systemctl reload nginx<br>
+</code>
+</div>
+
+<div class="pitfall">
+  <strong>⚠️ 常见误区：</strong>修改配置后直接重启 Nginx 而不是先测试。<code>nginx -t</code> 可以帮你发现语法错误，避免服务中断。<br>
+  <strong>参考：</strong><a href="https://nginx.org/en/docs/http/ngx_http_proxy_module.html" target="_blank">Nginx 官方 proxy 模块文档</a> | <a href="https://nginx.org/en/docs/beginners_guide.html" target="_blank">Nginx Beginner's Guide</a>
+</div>
+</div>
+
+<h2><span class="section-num">4</span> 第三步：部署应用</h2>
+
+<div class="step-box">
+<h3>4.1 安装 Node.js 运行环境</h3>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 使用 NodeSource 安装 Node.js 18 LTS（推荐）</span><br>
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -<br>
+sudo apt install -y nodejs<br><br>
+<span class="cmd-comment"># 验证安装</span><br>
+node -v   <span class="cmd-comment"># 输出 v18.x.x</span><br>
+npm -v    <span class="cmd-comment"># 输出 9.x.x</span><br>
+</code>
+</div>
+</div>
+
+<div class="step-box">
+<h3>4.2 从 Git 拉取应用并部署</h3>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 克隆代码（假设你的项目在 GitHub）</span><br>
+cd /var/www/myapp<br>
+git clone https://github.com/your-username/your-project.git .<br><br>
+<span class="cmd-comment"># 安装依赖</span><br>
+npm install<br><br>
+<span class="cmd-comment"># 构建（如果前端项目需要）</span><br>
+npm run build<br><br>
+<span class="cmd-comment"># 如果不需要构建，直接启动测试</span><br>
+node index.js &amp;<br>
+</code>
+</div>
+</div>
+
+<div class="step-box">
+<h3>4.3 使用 Systemd 守护进程</h3>
+<p>用 <code>node app.js &</code> 启动的应用在 SSH 断开后就死了。生产环境必须用进程管理器。Systemd 是 Linux 内置的方案，不需要额外安装：</p>
+
+<div class="cmd-block">
+<code><span class="cmd-comment"># 创建 Systemd 服务文件</span><br>
+sudo vim /etc/systemd/system/myapp.service<br>
+</code>
+</div>
+
+<div class="config-sample">
+<code><span class="comment"># /etc/systemd/system/myapp.service</span><br>
+[Unit]<br>
+Description=My App<br>
+After=network.target<br><br>
+[Service]<br>
+Type=simple<br>
+User=ubuntu<br>
+WorkingDirectory=/var/www/myapp<br>
+ExecStart=/usr/bin/node /var/www/myapp/index.js<br>
+Restart=always<br>
+RestartSec=3<br>
+Environment=NODE_ENV=production<br><br>
+[Install]<br>
+WantedBy=multi-user.target</code>
+</div>
+
+<div class="cmd-block">
+<code><span class="cmd-comment"># 启动服务并设置开机自启</span><br>
+sudo systemctl daemon-reload<br>
+sudo systemctl start myapp<br>
+sudo systemctl enable myapp<br><br>
+<span class="cmd-comment"># 常用管理命令</span><br>
+sudo systemctl status myapp     <span class="cmd-comment"># 查看状态</span><br>
+sudo systemctl restart myapp    <span class="cmd-comment"># 重启</span><br>
+sudo systemctl stop myapp       <span class="cmd-comment"># 停止</span><br>
+sudo journalctl -u myapp -f     <span class="cmd-comment"># 实时查看日志</span><br>
+</code>
+</div>
+
+<div class="pitfall">
+  <strong>⚠️ 常见误区：</strong>用 <code>node app.js</code> 直接启动就关终端了。必须用进程管理器！Systemd、PM2、Supervisor 都可以。<br>
+  <strong>参考：</strong><a href="https://www.freedesktop.org/software/systemd/man/systemd.service.html" target="_blank">Systemd 服务单元文档</a>
+</div>
+</div>
+
+<h2><span class="section-num">5</span> 第四步：配置 HTTPS（Let's Encrypt + Certbot）</h2>
+
+<p>这是生产环境<strong>绝对不能省略</strong>的一步。没有 HTTPS，所有流量明文传输，用户密码、API 密钥一览无余。</p>
+
+<div class="step-box">
+<h3>5.1 安装 Certbot 并获取证书</h3>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 先确保你的域名已解析到服务器 IP</span><br>
+<span class="cmd-comment"># 用 dig 检查确认后再继续</span><br>
+dig example.com +short<br><br>
+<span class="cmd-comment"># 安装 Certbot 的 Nginx 插件</span><br>
+sudo apt install -y certbot python3-certbot-nginx<br><br>
+<span class="cmd-comment"># 自动获取证书并配置 Nginx</span><br>
+sudo certbot --nginx -d example.com -d www.example.com<br><br>
+<span class="cmd-comment"># 按照提示输入邮箱并同意协议即可</span><br>
+<span class="cmd-comment"># Certbot 会自动修改 Nginx 配置，添加 SSL 相关指令</span><br>
+</code>
+</div>
+
+<p>执行完成后，再访问你的网站就会自动跳转到 HTTPS。Certbot 还会配置定时任务自动续期证书（Let's Encrypt 证书有效期 90 天）：</p>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 测试自动续期是否正常工作</span><br>
+sudo certbot renew --dry-run<br>
+</code>
+</div>
+</div>
+
+<div class="step-box">
+<h3>5.2 验证 HTTPS 配置</h3>
+<p>使用以下工具验证你的 SSL 配置是否安全：</p>
+<ul style="margin-left:1.5rem;margin-bottom:0.5rem;">
+  <li><a href="https://www.ssllabs.com/ssltest/" target="_blank">SSL Labs Test</a> — 最全面的 SSL 安全评级</li>
+  <li><a href="https://ssl-config.mozilla.org/" target="_blank">Mozilla SSL Configuration Generator</a> — 生成安全的 SSL 配置</li>
+</ul>
+<p>配置完成后，你的 Nginx SSL 配置大致长这样（Certbot 生成的）：</p>
+<div class="config-sample">
+<code>server {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;listen 443 ssl http2;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;server_name example.com www.example.com;<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;include /etc/letsencrypt/options-ssl-nginx.conf;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># ... 其它配置</span><br>
+}</code>
+</div>
+
+<div class="pitfall">
+  <strong>⚠️ 常见误区：</strong>用 Certbot 后就不再管了。Let's Encrypt 证书只有 90 天有效期，务必确认自动续期配置正确。<code>certbot renew --dry-run</code> 应该在定时任务中定期执行。<br>
+  <strong>参考：</strong><a href="https://certbot.eff.org/docs/" target="_blank">Certbot 官方文档</a> | <a href="https://letsencrypt.org/zh-cn/getting-started/" target="_blank">Let's Encrypt 入门</a>
+</div>
+</div>
+
+<h2><span class="section-num">6</span> 完整部署检查清单</h2>
+
+<div class="checklist">
+  <p style="font-weight:600;margin-bottom:0.5rem;">✅ 部署完成后逐项检查：</p>
+  <ol style="margin-left:1.2rem;">
+    <li>☐ 浏览器访问 <code>https://你的域名</code> 显示正常</li>
+    <li>☐ HTTP 自动跳转到 HTTPS</li>
+    <li>☐ 应用重启后能自动恢复（<code>sudo reboot</code> 测试）</li>
+    <li>☐ SSH 只能通过密钥登录，密码登录已禁用</li>
+    <li>☐ UFW 防火墙已启用，只开放 22/80/443 端口</li>
+    <li>☐ 云厂商安全组同样只开放上述端口</li>
+    <li>☐ 数据库端口（3306/5432）只绑定到 <code>127.0.0.1</code> 或内网 IP</li>
+    <li>☐ <code>sudo certbot renew --dry-run</code> 运行成功</li>
+    <li>☐ 日志轮转已配置（<code>/etc/logrotate.d/</code>）</li>
+  </ol>
+</div>
+
+<h2><span class="section-num">7</span> 小测验</h2>
+
+<div class="quiz" id="q1">
+  <p class="quiz-question">Q1: 修改 Nginx 配置后，第一步应该做什么？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q1',this,'wrong')">直接 sudo systemctl restart nginx</button></li>
+    <li><button onclick="check('q1',this,'correct')">先运行 sudo nginx -t 测试配置语法</button></li>
+    <li><button onclick="check('q1',this,'wrong')">重新加载防火墙规则</button></li>
+    <li><button onclick="check('q1',this,'wrong')">清除浏览器缓存再重启</button></li>
+  </ul>
+  <div id="q1-fb" class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <p class="quiz-question">Q2: 禁用 SSH 密码登录之前，必须确认什么？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q2',this,'wrong')">服务器的防火墙已经关闭</button></li>
+    <li><button onclick="check('q2',this,'correct')">SSH 密钥登录已经正常工作，并能从新终端连接上</button></li>
+    <li><button onclick="check('q2',this,'wrong')">服务器已安装图形界面</button></li>
+    <li><button onclick="check('q2',this,'wrong')">域名已经解析到服务器</button></li>
+  </ul>
+  <div id="q2-fb" class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <p class="quiz-question">Q3: 使用 certbot 配置 HTTPS 后，关于证书续期的正确理解是？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q3',this,'wrong')">一次配置永久有效，不需要管</button></li>
+    <li><button onclick="check('q3',this,'correct')">Let's Encrypt 证书 90 天有效，需要确认自动续期正常工作</button></li>
+    <li><button onclick="check('q3',this,'wrong')">每个月都要手动重新申请一次</button></li>
+    <li><button onclick="check('q3',this,'wrong')">HTTPS 只要配置好就不需要续期</button></li>
+  </ul>
+  <div id="q3-fb" class="quiz-feedback"></div>
+</div>
+
+<script>
+function check(quizId, btn, result) {
+  const quiz = document.getElementById(quizId);
+  const buttons = quiz.querySelectorAll('button');
+  buttons.forEach(b => { b.classList.add(b === btn ? result : ''); b.disabled = true; });
+  const fb = document.getElementById(quizId + '-fb');
+  const explanations = {
+    'q1': '每次修改 Nginx 配置后，必须先运行 <code>nginx -t</code> 测试语法。如果有错误，重启会让整个 Nginx 挂掉，导致所有站点不可用。',
+    'q2': '禁用密码登录前，必须确保密钥登录已经正常工作。最安全的做法是开一个新终端测试 SSH 能连上，再禁用密码登录，防止把自己锁在门外。',
+    'q3': 'Let\'s Encrypt 证书有效期为 90 天。Certbot 会安装 systemd 定时任务自动续期，但你应该定期运行 <code>certbot renew --dry-run</code> 确认自动续期正常工作。'
+  };
+  if (result === 'correct') {
+    fb.innerHTML = '✅ 正确！ ' + explanations[quizId];
+    fb.className = 'quiz-feedback correct-fb';
+  } else {
+    fb.innerHTML = '❌ ' + explanations[quizId];
+    fb.className = 'quiz-feedback wrong-fb';
+  }
+}
+</script>
+
+<h2 style="margin-top:2.5rem;">📖 推荐官方文档</h2>
+<ul>
+  <li><a href="https://nginx.org/en/docs/beginners_guide.html" target="_blank">Nginx Beginner's Guide</a> — Nginx 官方入门，必读</li>
+  <li><a href="https://nginx.org/en/docs/http/ngx_http_proxy_module.html" target="_blank">ngx_http_proxy_module</a> — Nginx 反向代理模块完整参考</li>
+  <li><a href="https://certbot.eff.org/instructions" target="_blank">Certbot 安装指南</a> — 各系统各 Web 服务器的 Certbot 安装步骤</li>
+  <li><a href="https://www.freedesktop.org/software/systemd/man/systemd.service.html" target="_blank">systemd.service 文档</a> — Systemd 服务单元配置参考</li>
+  <li><a href="https://help.ubuntu.com/community/UFW" target="_blank">UFW 社区文档</a> — Ubuntu 防火墙 UFW 使用指南</li>
+  <li><a href="https://dev.mysql.com/doc/refman/8.0/en/security.html" target="_blank">MySQL 安全部署指南</a> — 数据库安全配置建议</li>
+</ul>
+
+<h2>📌 第三课预告</h2>
+<div class="card">
+  <strong>第三课：Docker 容器化部署实战</strong>
+  <p style="margin:0.5rem 0 0;color:var(--text-muted);">手工部署很好，但每次换服务器都要重来一遍？这一课我们用 Docker 把整个应用和环境一起打包，做到"一次构建，到处运行"。</p>
+</div>
+
+<div class="lesson-footer">
+  <p><strong>💬 有问题吗？</strong>这课的动手内容很多，有哪一步卡住了随时问我。</p>
+  <p style="margin-top:0.5rem;">
+    <a href="../reference/deployment-glossary.html">📝 部署术语表</a> &nbsp;|&nbsp;
+    <a href="0002-deployment-overview.html">← 第一课：部署全景图</a> &nbsp;|&nbsp;
+    <a href="0003-traditional-deployment.html">📖 第二课</a>
+  </p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第五课：生产环境安全加固与运维</title>
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+  .step-box { border-left: 3px solid var(--accent); padding: 0.5rem 0 0.5rem 1.25rem; margin: 1.5rem 0; }
+  .step-box h3 { margin: 0 0 0.5rem; color: var(--accent); }
+  .cmd-block { background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem; border-radius: var(--radius); overflow-x: auto; margin: 0.75rem 0; font-size: 0.88rem; line-height: 1.6; }
+  .cmd-block code { background: none; padding: 0; color: inherit; }
+  .cmd-comment { color: #6c7086; }
+  .pitfall { background: #fef2f2; border: 1px solid #fca5a5; border-radius: var(--radius); padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.92rem; }
+  .pitfall strong { color: var(--danger); }
+  .config-sample { background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem; border-radius: var(--radius); overflow-x: auto; margin: 0.75rem 0; font-size: 0.85rem; line-height: 1.5; }
+  .config-sample .comment { color: #6c7086; }
+  .security-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 1rem 0; background: var(--card-bg); }
+  .security-card h3 { margin-top: 0; display: flex; align-items: center; gap: 0.4rem; }
+  .severity-high { background: #fef2f2; border-left: 3px solid var(--danger); padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.92rem; border-radius: 0 var(--radius) var(--radius) 0; }
+  .severity-medium { background: #fffbeb; border-left: 3px solid var(--warning); padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.92rem; border-radius: 0 var(--radius) var(--radius) 0; }
+  .checklist-item { display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.6rem; }
+  .checklist-item input { margin-top: 0.25rem; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-header"><a href="../reference/deployment-glossary.html">📖 课程导航</a></div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">网站部署</div>
+    <ul class="sidebar-links">
+      <li><a href="0002-deployment-overview.html">🌐 第1课 部署全景</a></li>
+      <li><a href="0007-local-vm.html">🖥️ 第2课 本地虚拟机</a></li>
+      <li><a href="0003-traditional-deployment.html">🖥️ 第3课 手工部署</a></li>
+      <li><a href="0004-docker-deployment.html">🐳 第4课 Docker</a></li>
+      <li><a href="0005-cicd-automation.html">⚙️ 第5课 CI/CD</a></li>
+      <li><a href="0006-production-security.html" class="active">🔒 第6课 安全运维</a></li>
+    </ul>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">参考 &amp; 旧课</div>
+    <ul class="sidebar-links">
+      <li><a href="../reference/deployment-glossary.html">📝 部署术语表</a></li>
+      <li><a href="0001-what-is-sdk.html">📦 SDK 入门</a></li>
+      <li><a href="../reference/sdk-glossary.html">📝 SDK 术语表</a></li>
+    </ul>
+  </div>
+</nav>
+
+<h1>🔒 第五课：生产环境安全加固与运维</h1>
+<p style="color: var(--text-muted); font-size: 0.95rem;">预计阅读时间：15 分钟 &nbsp;|&nbsp; 难度：进阶 ⭐⭐⭐</p>
+
+<div class="card" style="background: #fefce8; border-color: #facc15;">
+  <strong>📋 本课目标：</strong>完成本课后，你应该能对一台生产服务器做完整的安全基线检查，知道如何配置防火墙、HSTS、自动备份、基础监控，并制定灾难恢复计划。
+</div>
+
+<h2><span class="section-num">1</span> 安全不是可选项</h2>
+
+<p>很多开发者觉得"我的网站又没用户，没人会攻击的"——事实是：<strong>互联网上存在大量的自动化扫描脚本</strong>，它们无差别地扫描每个公网 IP。你的服务器在连上网的第一小时内就会收到 SSH 爆破尝试。</p>
+
+<p>安全不是"等网站做大了再考虑"的事，而是<strong>从部署第一天起就要做的事</strong>。这节课会把之前各课提到的安全要点汇总，并深入覆盖你没注意到的关键领域。</p>
+
+<h2><span class="section-num">2</span> 防火墙深度配置</h2>
+
+<div class="security-card">
+<h3>🔴 2.1 云安全组 + 服务器防火墙 = 双重防护</h3>
+<p>很多人的误区是只配了云安全组或只配了 UFW。正确做法是<strong>两者都配</strong>——云安全组做第一道防线，服务器内部防火墙做第二道。</p>
+
+<p><strong>云安全组建议规则（以阿里云为例）：</strong></p>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 阿里云安全组规则配置建议</span><br><br>
+<span class="cmd-comment"># 入站规则（Inbound）</span><br>
+协议: TCP, 端口: 22,  源: 你的家庭/公司 IP（或 VPN IP）<span class="cmd-comment"># SSH 不要对全世界开放</span><br>
+协议: TCP, 端口: 80,  源: 0.0.0.0/0              <span class="cmd-comment"># HTTP</span><br>
+协议: TCP, 端口: 443, 源: 0.0.0.0/0              <span class="cmd-comment"># HTTPS</span><br><br>
+<span class="cmd-comment"># 如果不需要直接 SSH，可用阿里云 ECS 的"会话管理"代替 SSH</span><br>
+</code>
+</div>
+
+<p><strong>服务器内部 UFW 配置：</strong></p>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 默认策略：拒绝所有入站，允许所有出站</span><br>
+sudo ufw default deny incoming<br>
+sudo ufw default allow outgoing<br><br>
+<span class="cmd-comment"># 只放行必要的端口</span><br>
+sudo ufw allow 22/tcp        <span class="cmd-comment"># SSH</span><br>
+sudo ufw allow 80/tcp        <span class="cmd-comment"># HTTP</span><br>
+sudo ufw allow 443/tcp       <span class="cmd-comment"># HTTPS</span><br><br>
+<span class="cmd-comment"># 启用防火墙</span><br>
+sudo ufw enable<br>
+sudo ufw status verbose      <span class="cmd-comment"># 查看完整规则</span><br>
+</code>
+</div>
+</div>
+
+<div class="security-card">
+<h3>🟡 2.2 Fail2ban：自动封禁恶意 IP</h3>
+<p>即使你禁用了密码登录，SSH 端口仍然会被扫描。Fail2ban 监控日志文件，检测到多次失败尝试后自动封禁 IP：</p>
+
+<div class="cmd-block">
+<code>sudo apt install -y fail2ban<br><br>
+<span class="cmd-comment"># 创建本地配置文件（不要直接改 /etc/fail2ban/jail.conf）</span><br>
+sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local<br><br>
+<span class="cmd-comment"># 编辑 jail.local，找到 [sshd] 部分</span><br>
+<span class="cmd-comment"># 确保以下设置：</span><br>
+[sshd]<br>
+enabled = true<br>
+maxretry = 5           <span class="cmd-comment"># 5 次失败后封禁</span><br>
+bantime = 3600         <span class="cmd-comment"># 封禁 1 小时（默认 600 秒）</span><br>
+findtime = 600         <span class="cmd-comment"># 10 分钟内的失败计数</span><br><br>
+sudo systemctl restart fail2ban<br>
+sudo fail2ban-client status sshd  <span class="cmd-comment"># 查看封禁状态</span><br>
+</code>
+</div>
+
+<div class="pitfall">
+  <strong>⚠️ 常见误区：</strong>只配了 UFW 但没配安全组，或者反过来。攻击者只要突破一层就能进来。云安全组和 UFW 是<strong>互补关系</strong>。<br>
+  <strong>参考：</strong><a href="https://help.aliyun.com/document_detail/25471.html" target="_blank">阿里云安全组文档</a> | <a href="https://help.ubuntu.com/community/UFW" target="_blank">UFW 文档</a> | <a href="https://github.com/fail2ban/fail2ban" target="_blank">Fail2ban GitHub</a>
+</div>
+</div>
+
+<h2><span class="section-num">3</span> HTTPS 深度指南</h2>
+
+<div class="security-card">
+<h3>🟢 3.1 HSTS：强制浏览器走 HTTPS</h3>
+<p>配置了 Certbot 后，用户如果输入 <code>http://</code> 仍然会被重定向到 HTTPS。但更好的做法是告诉浏览器"以后只走 HTTPS"：</p>
+
+<div class="config-sample">
+<code><span class="comment"># 在 Nginx 的 server block 中添加（certbot 配置的 443 区块里）</span><br>
+add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;<br><br>
+<span class="comment"># max-age=63072000 秒（2 年）</span><br>
+<span class="comment"># includeSubDomains 对所有子域名生效</span><br>
+<span class="comment"># ⚠️ 确认所有子域名都支持 HTTPS 后再加 includeSubDomains</span><br>
+</code>
+</div>
+</div>
+
+<div class="security-card">
+<h3>🟢 3.2 其他安全响应头</h3>
+<div class="config-sample">
+<code><span class="comment"># /etc/nginx/conf.d/security-headers.conf</span><br>
+add_header X-Frame-Options "SAMEORIGIN" always;<br>
+add_header X-Content-Type-Options "nosniff" always;<br>
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;<br>
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;<br>
+</code>
+</div>
+<p>这些头信息帮助浏览器防范点击劫持、MIME 嗅探等常见攻击。</p>
+</div>
+
+<div class="security-card">
+<h3>🟡 3.3 证书到期监控</h3>
+<p>证书到期后网站会直接崩掉。设置一个简单的定时检查脚本：</p>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 写一个简单的证书到期检查脚本</span><br>
+cat > ~/check-cert.sh << 'EOF'<br>
+#!/bin/bash<br>
+DOMAIN="example.com"<br>
+EXPIRY=$(echo | openssl s_client -servername $DOMAIN -connect $DOMAIN:443 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)<br>
+EXPIRY_EPOCH=$(date -d "$EXPIRY" +%s)<br>
+NOW_EPOCH=$(date +%s)<br>
+DAYS_LEFT=$(( ($EXPIRY_EPOCH - $NOW_EPOCH) / 86400 ))<br>
+echo "Certificate for $DOMAIN expires in $DAYS_LEFT days"<br>
+if [ $DAYS_LEFT -lt 7 ]; then echo "WARNING: Certificate expiring soon!"; fi<br>
+EOF<br>
+chmod +x ~/check-cert.sh<br>
+./check-cert.sh<br>
+</code>
+</div>
+</div>
+
+<h2><span class="section-num">4</span> 数据库安全</h2>
+
+<p>数据库是网站的核心资产——用户数据、订单、内容都在里面。数据库被攻破 = 灾难性的数据泄露。</p>
+
+<div class="security-card">
+<h3>🔴 数据库安全检查清单</h3>
+<ol style="margin-left:1.2rem; line-height:2;">
+  <li><strong>绑定到 127.0.0.1</strong> —— 在 MySQL 的 <code>/etc/mysql/mysql.conf.d/mysqld.cnf</code> 中设置 <code>bind-address = 127.0.0.1</code>，禁止远程连接</li>
+  <li><strong>使用强密码</strong> —— 至少 16 位，大小写字母 + 数字 + 符号</li>
+  <li><strong>创建专用用户</strong> —— 不要用 root 连接应用。每个应用创建独立的数据库用户，只赋予该应用所需的最小权限</li>
+  <li><strong>删除测试数据库</strong> —— <code>sudo mysql -e "DROP DATABASE IF EXISTS test;"</code></li>
+  <li><strong>启用日志</strong> —— 开启 MySQL 的 general log 或 slow query log 用于排查</li>
+  <li><strong>定期备份</strong> —— 见下一节</li>
+</ol>
+</div>
+
+<div class="cmd-block">
+<code><span class="cmd-comment"># MySQL 安全初始化（生产环境必须跑）</span><br>
+sudo mysql_secure_installation<br><br>
+<span class="cmd-comment"># 创建专用用户（示例）</span><br>
+CREATE USER 'myapp'@'localhost' IDENTIFIED BY 'your-strong-password-here';<br>
+GRANT SELECT, INSERT, UPDATE, DELETE ON myapp_db.* TO 'myapp'@'localhost';<br>
+FLUSH PRIVILEGES;<br>
+</code>
+</div>
+
+<div class="severity-high">
+  <strong>🔴 高危操作：</strong>数据库端口（3306/5432/27017）对公网开放。如果为了开发便利必须远程连接，使用 SSH 隧道（端口转发）而不是直接开放数据库端口。<br>
+  <code>ssh -L 3306:127.0.0.1:3306 ubuntu@你的服务器</code>
+</div>
+
+<h2><span class="section-num">5</span> 备份策略：3-2-1 原则实战</h2>
+
+<p>"我的数据不重要的，丢了也没关系"——几乎所有说过这句话的人最后都后悔了。</p>
+
+<div class="security-card">
+<h3>🗄️ 5.1 数据库自动备份脚本</h3>
+<div class="cmd-block">
+<code><span class="cmd-comment"># /usr/local/bin/backup-db.sh</span><br>
+#!/bin/bash<br>
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)<br>
+BACKUP_DIR="/backups/mysql"<br>
+DB_NAME="myapp_db"<br>
+DB_USER="backup_user"<br>
+DB_PASSWORD="your-backup-password"<br>
+RETENTION_DAYS=7<br><br>
+mkdir -p $BACKUP_DIR<br><br>
+<span class="cmd-comment"># 使用 mysqldump 备份</span><br>
+mysqldump -u $DB_USER -p$DB_PASSWORD $DB_NAME | gzip > $BACKUP_DIR/${DB_NAME}_${TIMESTAMP}.sql.gz<br><br>
+<span class="cmd-comment"># 删除 7 天前的旧备份</span><br>
+find $BACKUP_DIR -name "${DB_NAME}_*.sql.gz" -mtime +$RETENTION_DAYS -delete<br><br>
+echo "Backup completed: ${DB_NAME}_${TIMESTAMP}.sql.gz"<br>
+</code>
+</div>
+
+<div class="cmd-block">
+<code><span class="cmd-comment"># 添加到 crontab 每天凌晨 3 点执行</span><br>
+sudo crontab -e<br><br>
+<span class="cmd-comment"># 添加这一行</span><br>
+0 3 * * * /usr/local/bin/backup-db.sh<br>
+</code>
+</div>
+</div>
+
+<div class="security-card">
+<h3>☁️ 5.2 异地备份：备份文件上传到对象存储</h3>
+<p>仅在服务器上的备份不算真正的备份——服务器硬盘坏了或整台机器被攻击了，备份也跟着没了。你需要<strong>异地备份</strong>。</p>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 使用 aws-cli 将备份同步到 S3 / 阿里云 OSS</span><br>
+<span class="cmd-comment"># （需要先安装和配置 aws-cli 或 ossutil）</span><br>
+aws s3 sync /backups/ s3://myapp-backups/production/<br><br>
+<span class="cmd-comment"># 或者使用 rclone（支持几乎所有云存储）</span><br>
+rclone sync /backups/ remote:myapp-backups<br>
+</code>
+</div>
+
+<div class="pitfall">
+  <strong>⚠️ 常见误区：</strong>备份脚本写好了但从来没有测试过恢复。定期（至少每季度一次）做恢复演练——在测试服务器上把备份还原，确认数据是完整的、可用的。<br>
+  <strong>参考：</strong><a href="https://dev.mysql.com/doc/refman/8.0/en/backup-and-recovery.html" target="_blank">MySQL 备份与恢复文档</a>
+</div>
+</div>
+
+<h2><span class="section-num">6</span> 日志管理</h2>
+
+<div class="security-card">
+<h3>📋 6.1 日志轮转（Logrotate）</h3>
+<p>日志文件会无限增长，占满磁盘空间。Linux 的 logrotate 自动按天/大小轮转日志：</p>
+<div class="config-sample">
+<code><span class="comment"># /etc/logrotate.d/myapp</span><br>
+/var/log/myapp/*.log {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;daily<span class="comment">              # 每天轮转</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;rotate 30<span class="comment">            # 保留 30 天的日志</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;compress<span class="comment">            # 轮转后压缩</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;delaycompress<br>
+&nbsp;&nbsp;&nbsp;&nbsp;missingok<br>
+&nbsp;&nbsp;&nbsp;&nbsp;notifempty<br>
+&nbsp;&nbsp;&nbsp;&nbsp;create 0640 ubuntu ubuntu<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sharedscripts<br>
+&nbsp;&nbsp;&nbsp;&nbsp;postrotate<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;systemctl reload myapp<br>
+&nbsp;&nbsp;&nbsp;&nbsp;endscript<br>
+}</code>
+</div>
+</div>
+
+<div class="security-card">
+<h3>🔍 6.2 关键日志位置速查</h3>
+<table class="compare-table">
+  <thead><tr><th>日志文件</th><th>查看什么</th></tr></thead>
+  <tbody>
+    <tr><td><code>/var/log/nginx/access.log</code></td><td>Nginx 访问日志——谁在什么时间访问了什么路径</td></tr>
+    <tr><td><code>/var/log/nginx/error.log</code></td><td>Nginx 错误日志——502/504 等错误的线索</td></tr>
+    <tr><td><code>/var/log/auth.log</code></td><td>SSH 登录日志——有没有人尝试登录失败</td></tr>
+    <tr><td><code>/var/log/syslog</code></td><td>系统通用日志</td></tr>
+    <tr><td><code>journalctl -u myapp</code></td><td>应用（Systemd 服务）日志</td></tr>
+    <tr><td><code>journalctl -u docker</code></td><td>Docker 守护进程日志</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2><span class="section-num">7</span> 基础监控告警</h2>
+
+<p>不需要复杂的 Prometheus + Grafana 体系。对于单台或几台服务器，最简单有效的监控方案是：</p>
+
+<div class="security-card">
+<h3>📊 7.1 Netdata（一键安装，可视化监控）</h3>
+<p>Netdata 是一个开源的实时监控工具，一条命令安装完就能看到 CPU、内存、磁盘、网络、进程等所有指标：</p>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 一条命令安装 Netdata</span><br>
+bash <(curl -Ss https://my-netdata.io/kickstart.sh)<br><br>
+<span class="cmd-comment"># 安装完成后访问 http://你的服务器:19999</span><br>
+<span class="cmd-comment"># ⚠️ 记得在安全组中限制 19999 端口只能由你的 IP 访问</span><br>
+</code>
+</div>
+</div>
+
+<div class="security-card">
+<h3>📧 7.2 磁盘空间监控（简单脚本）</h3>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 一个简单的磁盘告警脚本</span><br>
+#!/bin/bash<br>
+THRESHOLD=80<br>
+USAGE=$(df -h / | awk 'NR==2 {print $5}' | cut -d% -f1)<br>
+if [ $USAGE -gt $THRESHOLD ]; then<br>
+&nbsp;&nbsp;echo "Disk usage is at ${USAGE}% on $(hostname)" | mail -s "Disk Alert" your-email@example.com<br>
+fi<br>
+</code>
+</div>
+</div>
+
+<div class="security-card">
+<h3>📡 7.3 Uptime 监控（外部服务）</h3>
+<p>从<strong>外部</strong>监控你的网站是否在线（内部监控看不出来网络层面或 DNS 问题）：</p>
+<ul style="margin-left:1.5rem;">
+  <li><a href="https://uptimerobot.com/" target="_blank">UptimeRobot</a> — 免费方案每 5 分钟检查一次，支持 50 个监控器</li>
+  <li><a href="https://betterstack.com/uptime" target="_blank">Better Uptime</a> — 提供电话/短信/邮件告警</li>
+  <li><a href="https://www.aliyun.com/product/jiankong" target="_blank">阿里云云监控</a> — 阿里云用户的内置方案</li>
+</ul>
+</div>
+
+<h2><span class="section-num">8</span> 灾难恢复计划</h2>
+
+<p>当最坏的情况发生时（服务器被入侵、数据被删除、硬盘故障），你需要一个<strong>文档化的恢复流程</strong>，而不是临时想该怎么办。</p>
+
+<div class="severity-medium">
+  <strong>🟡 灾难恢复步骤：</strong>
+  <ol style="margin-top:0.5rem;margin-left:1.2rem;line-height:1.8;">
+    <li><strong>评估损害</strong>——哪些服务挂了？数据是否丢失？入侵影响范围？</li>
+    <li><strong>隔离</strong>——如果被入侵，立即从网络断开服务器</li>
+    <li><strong>恢复数据</strong>——从最近的异地备份还原数据到新服务器</li>
+    <li><strong>重建服务</strong>——用你记录的部署文档在新服务器上重建环境</li>
+    <li><strong>恢复上线</strong>——更新 DNS 指向新服务器 IP</li>
+    <li><strong>事后复盘</strong>——记录根因、修复漏洞、更新恢复流程</li>
+  </ol>
+</div>
+
+<p><strong>你能做的最好准备：</strong></p>
+<ul style="margin-left:1.5rem;margin-bottom:1rem;line-height:1.8;">
+  <li>✅ 把部署流程写成文档（或者用 CI/CD 自动化，自动重建）</li>
+  <li>✅ 异地备份完整且可恢复（测试过！）</li>
+  <li>✅ 记录所有依赖和配置（不依赖"我记得当时是怎么配的"）</li>
+  <li>✅ 数据恢复的预计时间（RTO）和数据丢失容忍度（RPO）心中有数</li>
+</ul>
+
+<h2><span class="section-num">9</span> 安全基线检查清单</h2>
+
+<div class="card">
+  <p style="font-weight:600;margin-bottom:0.75rem;">✅ 生产环境上线前逐项检查：</p>
+  <div class="checklist-item">☐ SSH 禁用密码登录，仅使用密钥</div>
+  <div class="checklist-item">☐ SSH 禁用 root 直接登录（PermitRootLogin no）</div>
+  <div class="checklist-item">☐ UFW 防火墙已启用，只放行 22/80/443</div>
+  <div class="checklist-item">☐ 云安全组规则最小化，SSH 仅允许你的 IP</div>
+  <div class="checklist-item">☐ Nginx 配置了 HSTS 和其他安全头</div>
+  <div class="checklist-item">☐ HTTPS 证书已配置并验证自动续期</div>
+  <div class="checklist-item">☐ 数据库绑定到 127.0.0.1，不暴露到公网</div>
+  <div class="checklist-item">☐ 数据库使用专用用户和应用特定授权</div>
+  <div class="checklist-item">☐ 自动备份已配置（数据库 + 文件），且已测试恢复</div>
+  <div class="checklist-item">☐ 异地备份已配置（3-2-1 原则）</div>
+  <div class="checklist-item">☐ Fail2ban 已安装和配置</div>
+  <div class="checklist-item">☐ 日志轮转已配置</div>
+  <div class="checklist-item">☐ 磁盘空间监控已配置（或安装了 Netdata）</div>
+  <div class="checklist-item">☐ 外部 uptime 监控已设置</div>
+  <div class="checklist-item">☐ 灾难恢复文档已编写</div>
+</div>
+
+<h2><span class="section-num">10</span> 小测验</h2>
+
+<div class="quiz" id="q1">
+  <p class="quiz-question">Q1: 一个安全的数据库应该绑定到哪个地址？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q1',this,'wrong')">0.0.0.0</button></li>
+    <li><button onclick="check('q1',this,'wrong')">服务器的公网 IP</button></li>
+    <li><button onclick="check('q1',this,'correct')】">127.0.0.1（仅本地访问）</button></li>
+    <li><button onclick="check('q1',this,'wrong')】">不需要设置，默认就好</button></li>
+  </ul>
+  <div id="q1-fb" class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <p class="quiz-question">Q2: 以下哪个是正确的备份策略？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q2',this,'wrong')】">只在服务器上保留一份备份</button></li>
+    <li><button onclick="check('q2',this,'wrong')】">备份到同一块硬盘的不同目录</button></li>
+    <li><button onclick="check('q2',this,'correct')】">3 份副本、2 种不同介质、1 份异地</button></li>
+    <li><button onclick="check('q2',this,'wrong')】">每天手动备份一次就够了</button></li>
+  </ul>
+  <div id="q2-fb" class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <p class="quiz-question">Q3: 你的网站仅支持 HTTPS。用户通过 http:// 访问时应如何正确配置？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q3',this,'wrong')】">在 Nginx 中拒绝所有 HTTP 请求，返回 403</button></li>
+    <li><button onclick="check('q3',this,'correct')】">HTTP 301 重定向到 HTTPS + 启用 HSTS 头</button></li>
+    <li><button onclick="check('q3',this,'wrong')】">在 HTTP 上同时服务，让用户自己选择</button></li>
+    <li><button onclick="check('q3',this,'wrong')】">关闭 80 端口，等用户自己发现要加 https://</button></li>
+  </ul>
+  <div id="q3-fb" class="quiz-feedback"></div>
+</div>
+
+<script>
+function check(quizId, btn, result) {
+  const quiz = document.getElementById(quizId);
+  const buttons = quiz.querySelectorAll('button');
+  buttons.forEach(b => { b.classList.add(b === btn ? result : ''); b.disabled = true; });
+  const fb = document.getElementById(quizId + '-fb');
+  const explanations = {
+    'q1': '数据库绑定到 127.0.0.1 意味着只有本机上的应用能连接。任何远程连接请求都会被拒绝。这是保护数据库最重要的一步。',
+    'q2': '3-2-1 原则是行业标准：3 份副本（1 份生产 + 2 份备份）、2 种介质（如本地磁盘 + 云存储）、1 份异地（不同机房/云厂商）。确保任何单一故障不会导致数据丢失。',
+    'q3': '标准做法是：HTTP (80) 返回 301 重定向到 HTTPS 对应 URL，同时在 HTTPS 响应中设置 HSTS 头，告诉浏览器下次自动升级为 HTTPS。'
+  };
+  if (result === 'correct') {
+    fb.innerHTML = '✅ 正确！ ' + explanations[quizId];
+    fb.className = 'quiz-feedback correct-fb';
+  } else {
+    fb.innerHTML = '❌ ' + explanations[quizId];
+    fb.className = 'quiz-feedback wrong-fb';
+  }
+}
+</script>
+
+<h2 style="margin-top:2.5rem;">🎓 课程结语</h2>
+
+<div class="card" style="background: #eff6ff; border-color: #93c5fd;">
+  <p style="font-weight:600;font-size:1.05rem;">恭喜你完成了全部 5 节课！🎉</p>
+  <p>你走过的学习路径：</p>
+  <ol style="margin-left:1.2rem; line-height:1.8;">
+    <li>🌐 <strong>部署全景图</strong> —— 理解"从代码到用户"的完整链路</li>
+    <li>🖥️ <strong>手工部署</strong> —— SSH、Nginx、Systemd、HTTPS —— 掌握底层</li>
+    <li>🐳 <strong>Docker 容器化</strong> —— 一次构建，到处运行</li>
+    <li>⚙️ <strong>CI/CD 自动化</strong> —— git push 即部署</li>
+    <li>🔒 <strong>安全运维</strong> —— 防火墙、备份、监控、灾备</li>
+  </ol>
+  <p style="margin-top:0.75rem;">接下来的实践建议：</p>
+  <ul style="margin-left:1.2rem; line-height:1.8;">
+    <li>开一台最便宜的云服务器，按第二课的步骤完整走一遍</li>
+    <li>把项目 Docker 化，用 docker-compose.yml 编排所有服务</li>
+    <li>配置 GitHub Actions 实现自动部署到服务器</li>
+    <li>定期练习恢复备份（在测试环境还原一次）</li>
+  </ul>
+</div>
+
+<h2>📖 推荐官方文档（全课汇总）</h2>
+<ul>
+  <li><a href="https://nginx.org/en/docs/" target="_blank">Nginx 官方文档全集</a></li>
+  <li><a href="https://docs.docker.com/" target="_blank">Docker 官方文档</a></li>
+  <li><a href="https://docs.github.com/en/actions" target="_blank">GitHub Actions 文档</a></li>
+  <li><a href="https://letsencrypt.org/zh-cn/docs/" target="_blank">Let's Encrypt 文档</a></li>
+  <li><a href="https://help.aliyun.com/document_detail/25471.html" target="_blank">阿里云安全组文档</a></li>
+  <li><a href="https://cloud.tencent.com/document/product/215/20089" target="_blank">腾讯云安全组文档</a></li>
+  <li><a href="https://dev.mysql.com/doc/refman/8.0/en/security.html" target="_blank">MySQL 安全指南</a></li>
+  <li><a href="https://owasp.org/www-project-proactive-controls/" target="_blank">OWASP 主动安全控制清单</a></li>
+  <li><a href="https://ssl-config.mozilla.org/" target="_blank">Mozilla SSL Configuration Generator</a></li>
+  <li><a href="https://docs.docker.com/develop/develop-images/dockerfile_best-practices/" target="_blank">Dockerfile 最佳实践</a></li>
+  <li><a href="https://martinfowler.com/bliki/BlueGreenDeployment.html" target="_blank">Blue-Green Deployment (Martin Fowler)</a></li>
+</ul>
+
+<div class="lesson-footer">
+  <p><strong>💬 这节课或之前任何课有疑问？</strong>直接问我！也可以告诉我想深入学习的方向——比如 Kubernetes、监控系统、或者某个具体项目的部署方案。</p>
+  <p style="margin-top:0.5rem;">
+    <a href="../reference/deployment-glossary.html">📝 部署术语表</a> &nbsp;|&nbsp;
+    <a href="0005-cicd-automation.html">← 第四课：CI/CD</a> &nbsp;|&nbsp;
+    <a href="0006-production-security.html">📖 第五课</a>
+  </p>
+</div>
+
+</body>
+</html>

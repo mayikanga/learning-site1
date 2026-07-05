@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第四课：CI/CD 自动化部署流水线</title>
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+  .step-box { border-left: 3px solid var(--accent); padding: 0.5rem 0 0.5rem 1.25rem; margin: 1.5rem 0; }
+  .step-box h3 { margin: 0 0 0.5rem; color: var(--accent); }
+  .cmd-block { background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem; border-radius: var(--radius); overflow-x: auto; margin: 0.75rem 0; font-size: 0.88rem; line-height: 1.6; }
+  .cmd-block code { background: none; padding: 0; color: inherit; }
+  .cmd-comment { color: #6c7086; }
+  .pitfall { background: #fef2f2; border: 1px solid #fca5a5; border-radius: var(--radius); padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.92rem; }
+  .pitfall strong { color: var(--danger); }
+  .config-sample { background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem; border-radius: var(--radius); overflow-x: auto; margin: 0.75rem 0; font-size: 0.85rem; line-height: 1.5; }
+  .config-sample .comment { color: #6c7086; }
+  .config-sample .key { color: #89b4fa; }
+  .ci-flow { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.2rem; padding: 1rem 0; }
+  .ci-stage { display: flex; flex-direction: column; align-items: center; padding: 0.4rem 0.8rem; border-radius: var(--radius); font-size: 0.82rem; font-weight: 500; min-width: 65px; }
+  .ci-stage.code { background: #dbeafe; border: 1px solid #3b82f6; }
+  .ci-stage.test { background: #fef3c7; border: 1px solid #f59e0b; }
+  .ci-stage.build { background: #f3e8ff; border: 1px solid #a855f7; }
+  .ci-stage.deploy { background: #dcfce7; border: 1px solid #22c55e; }
+  .ci-stage.monitor { background: #fce7f3; border: 1px solid #ec4899; }
+  .secret-box { background: #fef2f2; border: 1px solid #fca5a5; border-radius: var(--radius); padding: 1rem; margin: 1rem 0; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-header"><a href="../reference/deployment-glossary.html">📖 课程导航</a></div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">网站部署</div>
+    <ul class="sidebar-links">
+      <li><a href="0002-deployment-overview.html">🌐 第1课 部署全景</a></li>
+      <li><a href="0007-local-vm.html">🖥️ 第2课 本地虚拟机</a></li>
+      <li><a href="0003-traditional-deployment.html">🖥️ 第3课 手工部署</a></li>
+      <li><a href="0004-docker-deployment.html">🐳 第4课 Docker</a></li>
+      <li><a href="0005-cicd-automation.html" class="active">⚙️ 第5课 CI/CD</a></li>
+      <li><a href="0006-production-security.html">🔒 第6课 安全运维</a></li>
+    </ul>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">参考 &amp; 旧课</div>
+    <ul class="sidebar-links">
+      <li><a href="../reference/deployment-glossary.html">📝 部署术语表</a></li>
+      <li><a href="0001-what-is-sdk.html">📦 SDK 入门</a></li>
+      <li><a href="../reference/sdk-glossary.html">📝 SDK 术语表</a></li>
+    </ul>
+  </div>
+</nav>
+
+<h1>⚙️ 第四课：CI/CD 自动化部署流水线</h1>
+<p style="color: var(--text-muted); font-size: 0.95rem;">预计阅读时间：14 分钟 &nbsp;|&nbsp; 难度：进阶 ⭐⭐⭐</p>
+
+<div class="card" style="background: #fefce8; border-color: #facc15;">
+  <strong>📋 本课目标：</strong>理解 CI/CD 的核心流程，能使用 GitHub Actions 搭建一条完整的自动化流水线——每次 git push 后自动构建、测试、部署到服务器。并了解蓝绿部署和回滚策略。
+</div>
+
+<h2><span class="section-num">1</span> 为什么需要 CI/CD？</h2>
+
+<p>前两课我们实践了两种部署方式，但都有一个共同的问题：<strong>每次更新都要手动操作</strong>。</p>
+
+<p>手工部署的工作流：</p>
+<div class="cmd-block">
+<code>git push<span style="color:#6c7086;">  →  SSH 连服务器  →  git pull  →  npm install  →  npm run build  →  pm2 restart  →  完成</span><br>
+</code>
+</div>
+
+<p>这里面每一步都可能出错（忘拉代码、用了旧依赖、端口冲突……）。而且当你需要频繁更新（一天多次）时，手工操作的时间成本不可忽视。</p>
+
+<p><strong>CI/CD 的目标：</strong>把上述流程自动化。你只做 <code>git push</code>，剩下的交给流水线。</p>
+
+<div class="ci-flow">
+  <span class="ci-stage code">✏️ 编码</span>
+  <span style="color:var(--text-muted);font-size:1.2rem;">→</span>
+  <span class="ci-stage code">⬆️ git push</span>
+  <span style="color:var(--text-muted);font-size:1.2rem;">→</span>
+  <span class="ci-stage test">🧪 自动测试</span>
+  <span style="color:var(--text-muted);font-size:1.2rem;">→</span>
+  <span class="ci-stage build">📦 自动构建</span>
+  <span style="color:var(--text-muted);font-size:1.2rem;">→</span>
+  <span class="ci-stage deploy">🚀 自动部署</span>
+  <span style="color:var(--text-muted);font-size:1.2rem;">→</span>
+  <span class="ci-stage monitor">📊 健康检查</span>
+</div>
+
+<h2><span class="section-num">2</span> CI/CD 核心概念</h2>
+
+<table class="compare-table">
+  <thead><tr><th>概念</th><th>做什么</th><th>交付物</th></tr></thead>
+  <tbody>
+    <tr><td><strong>CI（持续集成）</strong></td><td>频繁合并代码到主分支 → 自动运行测试和构建</td><td>一个通过测试的构建产物</td></tr>
+    <tr><td><strong>CD（持续部署）</strong></td><td>将通过 CI 的产物自动部署到生产环境</td><td>线上可访问的服务</td></tr>
+    <tr><td><strong>CD（持续交付）</strong></td><td>产物通过 CI 后自动准备好，但需要手动确认才部署到生产</td><td>一个"一键部署"的待命版本</td></tr>
+  </tbody>
+</table>
+
+<p>简单来说：<strong>CI = 自动检查代码质量，CD = 自动把代码送上线</strong>。</p>
+
+<h2><span class="section-num">3</span> GitHub Actions 实战：从零搭建流水线</h2>
+
+<p>GitHub Actions 是目前最流行的 CI/CD 平台之一（与 GitHub 仓库原生集成，无需额外配置）。</p>
+
+<div class="step-box">
+<h3>3.1 基本概念</h3>
+<table class="compare-table">
+  <thead><tr><th>术语</th><th>说明</th><th>类比</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Workflow</strong></td><td>一个完整的自动化流程，定义在 <code>.github/workflows/*.yml</code></td><td>工厂的生产线</td></tr>
+    <tr><td><strong>Job</strong></td><td>Workflow 中的一个任务单元。多个 Job 可以并行或串行执行</td><td>生产线上的一个工位</td></tr>
+    <tr><td><strong>Step</strong></td><td>Job 中的单个操作（运行命令或调用 Action）</td><td>工位上的一个操作</td></tr>
+    <tr><td><strong>Action</strong></td><td>可复用的 GitHub Actions 模块（社区或官方提供）</td><td>预制工具（扳手、螺丝刀）</td></tr>
+    <tr><td><strong>Runner</strong></td><td>运行 Workflow 的服务器（GitHub 托管或自托管）</td><td>工厂车间</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="step-box">
+<h3>3.2 编写第一个 Workflow</h3>
+<p>在仓库中创建 <code>.github/workflows/deploy.yml</code>：</p>
+
+<div class="config-sample">
+<code><span class="comment"># .github/workflows/deploy.yml</span><br>
+name: Deploy to Production<br><br>
+<span class="comment"># 触发条件：push 到 master/main 分支</span><br>
+on:<br>
+&nbsp;&nbsp;push:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;branches: [main]<br>
+&nbsp;&nbsp;<span class="comment"># 也可以手动触发</span><br>
+&nbsp;&nbsp;workflow_dispatch:<br><br>
+jobs:<br>
+&nbsp;&nbsp;<span class="comment"># Job 1：CI — 构建和测试</span><br>
+&nbsp;&nbsp;ci:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;runs-on: ubuntu-latest<br>
+&nbsp;&nbsp;&nbsp;&nbsp;steps:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- name: Checkout code<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uses: actions/checkout@v4<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- name: Setup Node.js<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uses: actions/setup-node@v4<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;node-version: 18<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- name: Install dependencies<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;run: npm ci<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- name: Run tests<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;run: npm test<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- name: Build<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;run: npm run build<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># 保存构建产物，供后续 Job 使用</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- name: Upload build artifact<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uses: actions/upload-artifact@v4<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name: build-output<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;path: dist/<br><br>
+&nbsp;&nbsp;<span class="comment"># Job 2：CD — 部署到服务器（等 CI 完成后再执行）</span><br>
+&nbsp;&nbsp;deploy:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;needs: ci<span class="comment">          # 等 ci job 成功后执行</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;runs-on: ubuntu-latest<br>
+&nbsp;&nbsp;&nbsp;&nbsp;steps:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- name: Download build artifact<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uses: actions/download-artifact@v4<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name: build-output<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;path: dist/<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- name: Deploy via SSH<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uses: appleboy/scp-action@v0.1.7<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;host: ${{ secrets.DEPLOY_HOST }}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;username: ${{ secrets.DEPLOY_USER }}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key: ${{ secrets.DEPLOY_KEY }}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;source: "dist/"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;target: "/var/www/myapp/"<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- name: Restart application<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uses: appleboy/ssh-action@v1.0.3<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;host: ${{ secrets.DEPLOY_HOST }}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;username: ${{ secrets.DEPLOY_USER }}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;key: ${{ secrets.DEPLOY_KEY }}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;script: |<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cd /var/www/myapp<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;docker compose pull<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;docker compose up -d --build<br>
+</code>
+</div>
+</div>
+
+<div class="step-box">
+<h3>3.3 配置 Secrets（敏感信息）</h3>
+<p>上面的 workflow 中使用了 <code>${{ secrets.XXX }}</code>，这些值绝对不能写在代码里。</p>
+
+<p>在 GitHub 仓库页面设置：</p>
+<div class="cmd-block">
+<code><span class="cmd-comment"># Settings → Secrets and variables → Actions → New repository secret</span><br><br>
+DEPLOY_HOST  → 你的服务器 IP（如 123.123.123.123）<br>
+DEPLOY_USER  → 登录用户名（如 ubuntu）<br>
+DEPLOY_KEY   → SSH 私钥的全部内容（cat ~/.ssh/id_ed25519）<br>
+<span style="color:#6c7086;"># 如果还需要其他敏感信息也放这里</span><br>
+DB_PASSWORD  → 数据库密码<br>
+</code>
+</div>
+
+<div class="pitfall">
+  <strong>⚠️ 安全警告：</strong>永远不要在 workflow 文件中硬编码密码、密钥、令牌。使用 GitHub Secrets。<br>
+  <strong>另外：</strong>用于部署的 SSH 密钥不要设置密码短语（passphrase），否则 CI 在运行时会卡住等待输入。<br>
+  <strong>参考：</strong><a href="https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions" target="_blank">GitHub Actions Secrets 文档</a>
+</div>
+</div>
+
+<h2><span class="section-num">4</span> Docker + CI/CD = 完美组合</h2>
+
+<p>将 Docker 与 CI/CD 结合是最常见的生产模式：</p>
+
+<div class="config-sample">
+<code><span class="comment"># .github/workflows/docker-deploy.yml 片段</span><br><br>
+jobs:<br>
+&nbsp;&nbsp;build-and-push:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;steps:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># ... checkout、test ...</span><br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- name: Login to Docker Hub<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uses: docker/login-action@v3<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;username: ${{ secrets.DOCKER_USERNAME }}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;password: ${{ secrets.DOCKER_PASSWORD }}<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- name: Build and push Docker image<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uses: docker/build-push-action@v5<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;push: true<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tags: ${{ secrets.DOCKER_USERNAME }}/myapp:latest<br><br>
+&nbsp;&nbsp;deploy:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;needs: build-and-push<br>
+&nbsp;&nbsp;&nbsp;&nbsp;steps:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- name: SSH and deploy<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;uses: appleboy/ssh-action@v1.0.3<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;script: |<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;docker pull myuser/myapp:latest<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;docker compose up -d --build<br>
+</code>
+</div>
+
+<p><strong>Docker 版本对比直接传文件的优势：</strong>服务器上不需要安装 Node.js 等运行时——Docker 镜像已经包含了所有依赖。服务器只需要 Docker 引擎。</p>
+
+<h2><span class="section-num">5</span> 蓝绿部署与回滚策略</h2>
+
+<div class="feature-box">
+  <h3>🌊 蓝绿部署（Blue-Green Deployment）</h3>
+  <p>核心思路：准备两套完全一样的环境（蓝/绿），只有一套对外服务：</p>
+  <ul style="margin-left:1.5rem;margin-top:0.5rem;line-height:1.8;">
+    <li><strong>蓝色环境</strong> = 当前生产环境（正在对外服务）</li>
+    <li><strong>绿色环境</strong> = 新版应用（先部署上去，但不接流量）</li>
+    <li>在绿色环境测试通过后，将 Nginx 流量切换到绿色</li>
+    <li>蓝色保留不动——如果发现绿色有问题，一秒切回蓝色</li>
+  </ul>
+</div>
+
+<p>Nginx 实现蓝绿切换的配置示意：</p>
+<div class="config-sample">
+<code><span class="comment"># 蓝绿切换：编辑 Nginx upstream，重载即可</span><br>
+upstream myapp {<br>
+&nbsp;&nbsp;<span class="comment"># server 127.0.0.1:3001;  # 蓝色（旧版，暂不启用）</span><br>
+&nbsp;&nbsp;server 127.0.0.1:3002;&nbsp;&nbsp;<span class="comment"># 绿色（新版，当前活跃）</span><br>
+}<br><br>
+server {<br>
+&nbsp;&nbsp;listen 80;<br>
+&nbsp;&nbsp;server_name example.com;<br>
+&nbsp;&nbsp;location / {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;proxy_pass http://myapp;<br>
+&nbsp;&nbsp;}<br>
+}</code>
+</div>
+
+<div class="step-box">
+<h3>5.1 回滚策略</h3>
+<p>自动化部署必须配套自动回滚能力：</p>
+<table class="compare-table">
+  <thead><tr><th>部署方式</th><th>回滚方法</th></tr></thead>
+  <tbody>
+    <tr><td>传统部署（文件）</td><td>保留前 N 个版本的备份目录，重新软链接即可回滚</td></tr>
+    <tr><td>Docker 部署</td><td>使用版本标签（如 <code>myapp:v1.2.3</code>），回滚时改 tag 重新部署</td></tr>
+    <tr><td>蓝绿部署</td><td>流量切回旧环境，一键完成</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2><span class="section-num">6</span> PaaS：另一种"自动化"思路</h2>
+
+<p>如果你不想自己维护 CI/CD 基础设施，也可以选择 <strong>PaaS（平台即服务）</strong>——代码推上去，平台帮你运行：</p>
+
+<table class="compare-table">
+  <thead><tr><th>平台</th><th>特点</th><th>适合场景</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Vercel</strong></td><td>前端/全栈（Next.js 亲爹），自动 HTTPS 和 CDN</td><td>前端项目、Next.js 应用</td></tr>
+    <tr><td><strong>Railway</strong></td><td>极简部署体验，支持多种语言和数据库</td><td>全栈项目快速部署</td></tr>
+    <tr><td><strong>Fly.io</strong></td><td>边缘部署，全球多节点</td><td>需要低延迟的全球应用</td></tr>
+    <tr><td><strong>Heroku</strong></td><td>PaaS 老牌标杆，生态完善</td><td>传统 Web 应用（但免费方案已取消）</td></tr>
+  </tbody>
+</table>
+
+<div class="highlight-box">
+  <strong>💡 建议学习方法：</strong>先用传统手工部署理解底层（第二课），然后用 Docker 提高效率（第三课），最后用 CI/CD 彻底解放双手（第四课）。这三层递进，每一层都让你更理解下一层的价值。
+</div>
+
+<h2><span class="section-num">7</span> 小测验</h2>
+
+<div class="quiz" id="q1">
+  <p class="quiz-question">Q1: GitHub Actions 中，如何确保 deploy job 在 ci job 成功后才执行？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q1',this,'wrong')">把 deploy 写在 ci 的 steps 里</button></li>
+    <li><button onclick="check('q1',this,'correct')">在 deploy 中使用 needs: ci 指定依赖</button></li>
+    <li><button onclick="check('q1',this,'wrong')">设置 deploy 的 runs-on 为 ci 的 runner</button></li>
+    <li><button onclick="check('q1',this,'wrong')">把两个 job 合并成一个</button></li>
+  </ul>
+  <div id="q1-fb" class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <p class="quiz-question">Q2: 如何在 GitHub Actions 中安全使用服务器密码和密钥？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q2',this,'wrong')">写在 workflow YAML 文件的环境变量中</button></li>
+    <li><button onclick="check('q2',this,'wrong')）">在仓库的 .env 文件中配置并上传</button></li>
+    <li><button onclick="check('q2',this,'correct')）">在 GitHub 仓库 Settings → Secrets 中配置，用 ${{ secrets.XXX }} 引用</button></li>
+    <li><button onclick="check('q2',this,'wrong')）">在代码中用 process.env 读取服务器本地文件</button></li>
+  </ul>
+  <div id="q2-fb" class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <p class="quiz-question">Q3: 蓝绿部署相比直接部署的最大优势是什么？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q3',this,'wrong')">部署速度最快</button></li>
+    <li><button onclick="check('q3',this,'correct')）">可以秒级回滚——出问题立即切回旧环境</button></li>
+    <li><button onclick="check('q3',this,'wrong')）">不需要测试新版本</button></li>
+    <li><button onclick="check('q3',this,'wrong')）">节省服务器资源</button></li>
+  </ul>
+  <div id="q3-fb" class="quiz-feedback"></div>
+</div>
+
+<script>
+function check(quizId, btn, result) {
+  const quiz = document.getElementById(quizId);
+  const buttons = quiz.querySelectorAll('button');
+  buttons.forEach(b => { b.classList.add(b === btn ? result : ''); b.disabled = true; });
+  const fb = document.getElementById(quizId + '-fb');
+  const explanations = {
+    'q1': 'GitHub Actions 的 <code>needs</code> 关键字定义 job 依赖。deploy job 设置了 <code>needs: ci</code> 后，会在 ci job 成功完成后才执行。如果 ci 失败，deploy 会被跳过。',
+    'q2': 'GitHub Secrets 是加密存储的，workflow 运行时才会注入。写在 YAML 或 .env 文件里会随代码一起提交，等于把密码公开。',
+    'q3': '蓝绿部署的核心优势是"即时止损"。新版出问题了，Nginx 切回旧环境只需几秒钟，用户几乎无感知。不需要重新部署旧版本。'
+  };
+  if (result === 'correct') {
+    fb.innerHTML = '✅ 正确！ ' + explanations[quizId];
+    fb.className = 'quiz-feedback correct-fb';
+  } else {
+    fb.innerHTML = '❌ ' + explanations[quizId];
+    fb.className = 'quiz-feedback wrong-fb';
+  }
+}
+</script>
+
+<h2 style="margin-top:2.5rem;">📖 推荐官方文档</h2>
+<ul>
+  <li><a href="https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions" target="_blank">GitHub Actions Workflow Syntax</a> — Workflow 文件完整语法参考</li>
+  <li><a href="https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions" target="_blank">Using Secrets in GitHub Actions</a> — 如何在 Actions 中安全使用敏感信息</li>
+  <li><a href="https://docs.docker.com/ci-cd/github-actions/" target="_blank">Docker + GitHub Actions CI/CD</a> — 官方 Docker CI/CD 集成指南</li>
+  <li><a href="https://martinfowler.com/bliki/BlueGreenDeployment.html" target="_blank">BlueGreenDeployment — Martin Fowler</a> — 蓝绿部署的经典文章</li>
+  <li><a href="https://vercel.com/docs" target="_blank">Vercel 文档</a> — PaaS 部署平台参考</li>
+</ul>
+
+<h2>📌 第五课预告</h2>
+<div class="card">
+  <strong>第五课：生产环境安全加固与运维</strong>
+  <p style="margin:0.5rem 0 0;color:var(--text-muted);">部署上线只是开始。这一课覆盖生产环境必须做的安全措施——防火墙深度配置、备份策略、监控告警、日志管理，以及灾难恢复计划。</p>
+</div>
+
+<div class="lesson-footer">
+  <p><strong>💬 有问题吗？</strong>CI/CD 的概念比较新，想深入了解的地方随时问。</p>
+  <p style="margin-top:0.5rem;">
+    <a href="../reference/deployment-glossary.html">📝 部署术语表</a> &nbsp;|&nbsp;
+    <a href="0004-docker-deployment.html">← 第三课：Docker</a> &nbsp;|&nbsp;
+    <a href="0005-cicd-automation.html">📖 第四课</a>
+  </p>
+</div>
+
+</body>
+</html>

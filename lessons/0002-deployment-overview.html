@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第一课：网站部署全景图</title>
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+  .architecture-flow { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem 0; padding: 1.5rem 0; margin: 1rem 0; }
+  .arch-box { display: inline-block; padding: 0.6rem 1.2rem; border-radius: var(--radius); font-weight: 600; font-size: 0.9rem; text-align: center; min-width: 80px; }
+  .arch-box.dev { background: #dbeafe; border: 2px solid #3b82f6; }
+  .arch-box.build { background: #fef3c7; border: 2px solid #f59e0b; }
+  .arch-box.serve { background: #dcfce7; border: 2px solid #22c55e; }
+  .arch-box.dns { background: #f3e8ff; border: 2px solid #a855f7; }
+  .arch-box.cdn { background: #fce7f3; border: 2px solid #ec4899; }
+  .arch-arrow { color: var(--text-muted); font-size: 1.2rem; padding: 0 0.2rem; align-self: center; }
+  .deploy-matrix { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  .deploy-matrix th { background: var(--accent-light); text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid var(--border); font-weight: 600; }
+  .deploy-matrix td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .deploy-matrix tr:hover td { background: #fafaf8; }
+  .feature-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 1rem 0; }
+  .feature-box h3 { margin-top: 0; }
+  .cmd-block { background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem; border-radius: var(--radius); overflow-x: auto; margin: 1rem 0; font-size: 0.88rem; line-height: 1.6; }
+  .cmd-block code { background: none; padding: 0; color: inherit; }
+  .cmd-comment { color: #6c7086; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-header"><a href="../reference/deployment-glossary.html">📖 课程导航</a></div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">网站部署</div>
+    <ul class="sidebar-links">
+      <li><a href="0002-deployment-overview.html" class="active">🌐 第1课 部署全景</a></li>
+      <li><a href="0007-local-vm.html">🖥️ 第2课 本地虚拟机</a></li>
+      <li><a href="0003-traditional-deployment.html">🖥️ 第3课 手工部署</a></li>
+      <li><a href="0004-docker-deployment.html">🐳 第4课 Docker</a></li>
+      <li><a href="0005-cicd-automation.html">⚙️ 第5课 CI/CD</a></li>
+      <li><a href="0006-production-security.html">🔒 第6课 安全运维</a></li>
+    </ul>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">参考 &amp; 旧课</div>
+    <ul class="sidebar-links">
+      <li><a href="../reference/deployment-glossary.html">📝 部署术语表</a></li>
+      <li><a href="0001-what-is-sdk.html">📦 SDK 入门</a></li>
+      <li><a href="../reference/sdk-glossary.html">📝 SDK 术语表</a></li>
+    </ul>
+  </div>
+</nav>
+
+<h1>🌐 第一课：网站部署全景图</h1>
+<p style="color: var(--text-muted); font-size: 0.95rem;">预计阅读时间：12 分钟 &nbsp;|&nbsp; 难度：入门 ⭐</p>
+
+<div class="card" style="background: #fefce8; border-color: #facc15;">
+  <strong>📋 本课目标：</strong>看完这节课，你应该能画出"从敲完代码到用户访问"的完整链路图，知道每种部署方式适合什么场景，并能做出适合自己的技术选型。
+</div>
+
+<h2><span class="section-num">1</span> 一句话说清"网站部署"</h2>
+
+<p><strong>网站部署</strong>，就是把写在你自己电脑上的代码，变成一台<strong>7×24 小时运行在互联网上的服务器</strong>里正在执行的服务——让全世界任何地方的任何人都能访问它。</p>
+
+<p>听起来简单？但实际上它包含了一整条链路：</p>
+
+<div class="architecture-flow">
+  <span class="arch-box dev">💻 开发</span>
+  <span class="arch-arrow">→</span>
+  <span class="arch-box build">📦 构建</span>
+  <span class="arch-arrow">→</span>
+  <span class="arch-box serve">☁️ 服务器</span>
+  <span class="arch-arrow">→</span>
+  <span class="arch-box dns">🔗 DNS</span>
+  <span class="arch-arrow">→</span>
+  <span class="arch-box cdn">⚡ CDN</span>
+  <span class="arch-arrow">→</span>
+  <span class="arch-box dev">👤 用户</span>
+</div>
+
+<p>任何一个环节出问题，用户就访问不了你的网站。这就是为什么要系统性理解部署——而不是只会把文件传上去就完事。</p>
+
+<h2><span class="section-num">2</span> 三种主流部署方式</h2>
+
+<p>目前最常用的部署方式可以归为三大类。它们不是在"谁更好"的竞争关系，而是在<strong>复杂度、灵活性、运维成本</strong>三个维度上的不同取舍：</p>
+
+<table class="deploy-matrix">
+  <thead>
+    <tr><th>部署方式</th><th>典型场景</th><th>运维成本</th><th>灵活度</th><th>适合谁</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>传统手工部署</strong></td>
+      <td>一台云服务器，SSH 上去手动配 Nginx、MySQL、跑应用</td>
+      <td>⭐⭐⭐ 中</td>
+      <td>⭐⭐⭐⭐⭐ 极高</td>
+      <td>想深入理解底层原理的开发者</td>
+    </tr>
+    <tr>
+      <td><strong>容器化部署（Docker）</strong></td>
+      <td>用 Docker 打包应用和依赖，一条命令启动全部服务</td>
+      <td>⭐⭐ 较低</td>
+      <td>⭐⭐⭐⭐ 高</td>
+      <td>需要环境一致性和快速迁移的团队</td>
+    </tr>
+    <tr>
+      <td><strong>自动化部署（CI/CD + PaaS）</strong></td>
+      <td>Git push 后自动构建、测试、部署到服务器或云平台</td>
+      <td>⭐ 低</td>
+      <td>⭐⭐⭐ 中</td>
+      <td>追求效率、减少人为失误的团队</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="analogy">
+  <strong>🍳 一个类比：三种做饭方式</strong><br><br>
+  <strong>传统手工部署</strong> = 从种菜开始自己做一顿饭。最灵活（想放多少盐放多少），但每一步都得亲力亲为。<br>
+  <strong>Docker 部署</strong> = 用料理包。环境全都封装好了，加热即食，但口味是定好的。<br>
+  <strong>CI/CD + PaaS</strong> = 点外卖。你把需求（代码）交出去，等吃就行。最省事，但也最不灵活。
+</div>
+
+<h2><span class="section-num">3</span> 选服务器：你要做的第一个决策</h2>
+
+<p>部署的第一步是选一台服务器。对初中级开发者来说，有一个清晰的优先级：</p>
+
+<div class="feature-box">
+  <h3>📌 团队或个人项目</h3>
+  <p><strong>首选：云服务器（VPS）</strong>——阿里云 ECS、腾讯云 CVM、华为云 HECS、AWS EC2、DigitalOcean Droplet 等。<br>
+  性价比高，弹性扩展，控制台操作方便。入门配置（1核 2G）月费约 50~100 元（新人首年有优惠）。</p>
+
+  <h3>📌 学习与实验</h3>
+  <p><strong>本地虚拟机</strong>——VirtualBox / VMware 安装 Ubuntu Server，零成本练习。<br>
+  或用云厂商的"按量付费"模式，用完即停。</p>
+
+  <h3>📌 追求极致简化</h3>
+  <p><strong>PaaS 平台</strong>——Vercel、Railway、Fly.io 等。把代码一推就行了。<br>
+  但代价是灵活度有限，不适合定制需求。</p>
+</div>
+
+<h2><span class="section-num">4</span> 域名与 DNS：用户怎么找到你的网站</h2>
+
+<p>用户在你的浏览器输入 <code>https://example.com</code>，发生了什么？</p>
+
+<p>简单来说：</p>
+<ol style="margin-left:1.5rem; margin-bottom:1rem;">
+  <li>浏览器向 DNS 服务器查询 <code>example.com</code> 对应的 IP 地址</li>
+  <li>DNS 返回 A 记录指向的 IP（比如 <code>123.123.123.123</code>）</li>
+  <li>浏览器向该 IP 发起 HTTP 请求</li>
+  <li>服务器上的 Web 服务（Nginx）接收请求并返回网页</li>
+</ol>
+
+<p>与部署相关的 DNS 核心概念：</p>
+<table class="compare-table">
+  <thead><tr><th>记录类型</th><th>作用</th><th>示例</th></tr></thead>
+  <tbody>
+    <tr><td><strong>A 记录</strong></td><td>域名 → IPv4 地址</td><td><code>@</code> → <code>123.123.123.123</code></td></tr>
+    <tr><td><strong>AAAA 记录</strong></td><td>域名 → IPv6 地址</td><td><code>@</code> → <code>2001:db8::1</code></td></tr>
+    <tr><td><strong>CNAME 记录</strong></td><td>域名 → 另一个域名</td><td><code>www</code> → <code>example.com</code></td></tr>
+    <tr><td><strong>MX 记录</strong></td><td>域名 → 邮件服务器</td><td><code>@</code> → <code>mail.example.com</code></td></tr>
+  </tbody>
+</table>
+
+<div class="highlight-box">
+  <strong>💡 常见误区：</strong>买了一台服务器，配好域名，发现还是访问不了——很可能是 DNS 没生效（DNS 缓存更新通常需要几分钟到 48 小时）。改完 DNS 后可以用 <code>dig example.com</code> 或 <a href="https://dns.google/" target="_blank">Google DNS Check</a> 验证解析状态。
+</div>
+
+<h2><span class="section-num">5</span> 部署拓扑：从单机到集群</h2>
+
+<p>对刚入门来说，大部分项目从 <strong>单体单机</strong> 开始就够了。但随着规模增长，部署拓扑会逐渐复杂化：</p>
+
+<div class="feature-box">
+  <h3>阶段一：单机部署</h3>
+  <p>一台服务器上运行 Web 服务 + 数据库 + 应用。最常见、最便宜的方案。<br>
+  ✅ 适合：个人项目、小团队 MVP<br>
+  ❌ 问题：单点故障（服务器宕机=网站挂了）、升级要停机</p>
+
+  <h3>阶段二：前后端分离部署</h3>
+  <p>前端静态文件（HTML/CSS/JS）部署到 CDN 或对象存储；后端 API 部署在服务器上，用 Nginx 反向代理。<br>
+  ✅ 适合：前后端分离架构的项目</p>
+
+  <h3>阶段三：多服务器 + 负载均衡</h3>
+  <p>两台以上的应用服务器 + 一个负载均衡器分发流量，数据库独立部署。<br>
+  ✅ 适合：需要高可用和水平扩展的生产环境</p>
+</div>
+
+<h2><span class="section-num">6</span> 部署流程全景：从代码到上线</h2>
+
+<p>无论你用哪种方式部署，完整流程大致如下。这也是本课程 5 节课将带你走过的路线：</p>
+
+<div class="card">
+  <ol style="margin-left:1.2rem; line-height:2;">
+    <li><strong>准备服务器</strong> —— 选购云服务器、操作系统初始化、SSH 配置 ← <strong>第二课</strong></li>
+    <li><strong>安装运行时环境</strong> —— Node.js/Python/Java、数据库、Web 服务器 ← <strong>第二课</strong></li>
+    <li><strong>配置 Web 服务器</strong> —— Nginx 反向代理、HTTPS 证书 ← <strong>第二课</strong></li>
+    <li><strong>部署应用</strong> —— 上传/拉取代码、安装依赖、启动服务 ← <strong>第二、三课</strong></li>
+    <li><strong>容器化（可选）</strong> —— 编写 Dockerfile、Compose 编排 ← <strong>第三课</strong></li>
+    <li><strong>自动化流水线</strong> —— GitHub Actions 自动构建和部署 ← <strong>第四课</strong></li>
+    <li><strong>安全加固</strong> —— 防火墙、SSH 安全、备份策略、监控 ← <strong>第五课</strong></li>
+  </ol>
+</div>
+
+<h2><span class="section-num">7</span> 基础安全意识：从一开始就做对</h2>
+
+<p>不要在学完所有东西后才考虑安全——<strong>从第一天起就要有安全意识</strong>。以下是四条铁律，后面的课会逐一展开：</p>
+
+<table class="compare-table">
+  <thead><tr><th>#</th><th>原则</th><th>为什么重要</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>🔑 禁用密码登录，使用 SSH 密钥</strong></td><td>密码可以被暴力破解。SSH 密钥使用 2048 位以上的 RSA 或 Ed25519 加密，安全等级高出几个数量级。</td></tr>
+    <tr><td>2</td><td><strong>🧱 最小权限防火墙</strong></td><td>只开放必要的端口（22、80、443），其他一律关闭。数据库端口（3306、5432）绝对不对公网开放。</td></tr>
+    <tr><td>3</td><td><strong>🔒 HTTPS 不是可选项</strong></td><td>没有 HTTPS，数据明文传输。Let's Encrypt 提供免费证书，没有理由不启用。</td></tr>
+    <tr><td>4</td><td><strong>📦 定期备份</strong></td><td>"什么时候开始备份？"——在丢数据之前。3-2-1 备份原则：3 副本、2 介质、1 份异地。</td></tr>
+  </tbody>
+</table>
+
+<h2><span class="section-num">8</span> 小测验</h2>
+
+<div class="quiz" id="q1">
+  <p class="quiz-question">Q1: 用户输入域名访问网站时，第一步发生的是什么？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q1',this,'wrong')">浏览器直接连接服务器的 IP</button></li>
+    <li><button onclick="check('q1',this,'correct')">浏览器向 DNS 服务器查询域名对应的 IP</button></li>
+    <li><button onclick="check('q1',this,'wrong')">浏览器向 CDN 请求缓存的内容</button></li>
+    <li><button onclick="check('q1',this,'wrong')">浏览器发送 HTTP 请求到服务器</button></li>
+  </ul>
+  <div id="q1-fb" class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <p class="quiz-question">Q2: 以下对 3-2-1 备份原则的描述，哪项是正确的？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q2',this,'wrong')">每天备份 3 次，每次 2 小时，保留 1 周</button></li>
+    <li><button onclick="check('q2',this,'correct')">3 份副本、2 种介质、1 份异地</button></li>
+    <li><button onclick="check('q2',this,'wrong')">3 台服务器、2 条网络、1 个备份中心</button></li>
+    <li><button onclick="check('q2',this,'wrong')">3 个环境（开发/测试/生产）、2 个运维人员、1 份文档</button></li>
+  </ul>
+  <div id="q2-fb" class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <p class="quiz-question">Q3: 你的数据库部署在云服务器上，以下哪项是正确做法？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q3',this,'wrong')">数据库端口（如 3306）对全网开放，方便随时连接</button></li>
+    <li><button onclick="check('q3',this,'wrong')">只对本地开放，应用通过公网 IP 连接数据库</button></li>
+    <li><button onclick="check('q3',this,'correct')">数据库端口仅允许应用服务器的内网 IP 访问，绝不暴露到公网</button></li>
+    <li><button onclick="check('q3',this,'wrong')">数据库端口只对国外 IP 关闭，国内 IP 全放行</button></li>
+  </ul>
+  <div id="q3-fb" class="quiz-feedback"></div>
+</div>
+
+<script>
+function check(quizId, btn, result) {
+  const quiz = document.getElementById(quizId);
+  const buttons = quiz.querySelectorAll('button');
+  buttons.forEach(b => { b.classList.add(b === btn ? result : ''); b.disabled = true; });
+  const fb = document.getElementById(quizId + '-fb');
+  if (result === 'correct') {
+    fb.textContent = '✅ 正确！';
+    fb.className = 'quiz-feedback correct-fb';
+  } else {
+    fb.textContent = '❌ 回答不正确，看看解析吧。';
+    fb.className = 'quiz-feedback wrong-fb';
+  }
+  // Show correct explanation
+  const explanations = {
+    'q1': 'DNS 解析是第一步。浏览器不知道 example.com 是哪台机器，必须先问 DNS 拿到 IP 地址，然后才能建立连接。',
+    'q2': '3-2-1 原则是业界标准备份策略：保留 3 份副本，存储在 2 种不同介质上（如本地磁盘 + 云存储），其中 1 份放在异地（不同机房或云厂商）。',
+    'q3': '这是最基本的安全原则。数据库端口永远不应该暴露到公网。应通过内网地址访问，并在安全组/防火墙层面限制源 IP。'
+  };
+  if (result === 'wrong') {
+    fb.textContent += ' ' + explanations[quizId];
+  } else {
+    fb.textContent += ' ' + explanations[quizId];
+  }
+}
+</script>
+
+<h2 style="margin-top:2.5rem;">📖 推荐官方文档</h2>
+<ul>
+  <li><a href="https://nginx.org/en/docs/beginners_guide.html" target="_blank">Nginx Beginner's Guide</a> — Nginx 官方入门指南，了解反向代理的基础概念</li>
+  <li><a href="https://www.cloudflare.com/learning/dns/what-is-dns/" target="_blank">What is DNS? — Cloudflare</a> — DNS 工作原理的详细图文解释</li>
+  <li><a href="https://letsencrypt.org/zh-cn/getting-started/" target="_blank">Let's Encrypt 入门指南</a> — 免费 SSL 证书的获取方式和原理</li>
+  <li><a href="https://docs.docker.com/get-started/" target="_blank">Docker Get Started</a> — Docker 官方入门教程（阅读前 3 节了解容器概念）</li>
+</ul>
+
+<h2>📌 第二课预告</h2>
+<div class="card">
+  <strong>第二课：传统云服务器手工部署</strong>
+  <p style="margin:0.5rem 0 0;color:var(--text-muted);">从购买一台云服务器开始，SSH 连上去，配置 Nginx 反向代理，部署一个 Web 应用，配置 HTTPS——亲手走完一套完整的手工部署流程。</p>
+</div>
+
+<div class="lesson-footer">
+  <p><strong>💬 有问题吗？</strong>直接问——任何概念不清楚、或者想深入了解的方向，都可以告诉我。</p>
+  <p style="margin-top:0.5rem;">
+    <a href="../reference/deployment-glossary.html">📝 部署术语表</a> &nbsp;|&nbsp;
+    <a href="0002-deployment-overview.html">📖 第一课</a>
+  </p>
+</div>
+
+</body>
+</html>

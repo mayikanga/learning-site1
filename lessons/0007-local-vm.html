@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第二课：本地虚拟机搭建 — 零成本部署实验环境</title>
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+  .step-box { border-left: 3px solid var(--accent); padding: 0.5rem 0 0.5rem 1.25rem; margin: 1.5rem 0; }
+  .step-box h3 { margin: 0 0 0.5rem; color: var(--accent); }
+  .cmd-block { background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem; border-radius: var(--radius); overflow-x: auto; margin: 0.75rem 0; font-size: 0.88rem; line-height: 1.6; }
+  .cmd-block code { background: none; padding: 0; color: inherit; }
+  .cmd-comment { color: #6c7086; }
+  .pitfall { background: #fef2f2; border: 1px solid #fca5a5; border-radius: var(--radius); padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.92rem; }
+  .pitfall strong { color: var(--danger); }
+  .screenshot-placeholder { background: #f1f5f9; border: 2px dashed var(--border); border-radius: var(--radius); padding: 2rem; text-align: center; color: var(--text-muted); margin: 1rem 0; font-size: 0.9rem; }
+  .network-diagram { font-family: monospace; line-height: 1.8; padding: 1rem; background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); margin: 1rem 0; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-header"><a href="../reference/deployment-glossary.html">📖 课程导航</a></div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">网站部署</div>
+    <ul class="sidebar-links">
+      <li><a href="0002-deployment-overview.html">🌐 第1课 部署全景</a></li>
+      <li><a href="0007-local-vm.html" class="active">🖥️ 第2课 本地虚拟机</a></li>
+      <li><a href="0003-traditional-deployment.html">🖥️ 第3课 手工部署</a></li>
+      <li><a href="0004-docker-deployment.html">🐳 第4课 Docker</a></li>
+      <li><a href="0005-cicd-automation.html">⚙️ 第5课 CI/CD</a></li>
+      <li><a href="0006-production-security.html">🔒 第6课 安全运维</a></li>
+    </ul>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">参考 &amp; 旧课</div>
+    <ul class="sidebar-links">
+      <li><a href="../reference/deployment-glossary.html">📝 部署术语表</a></li>
+      <li><a href="0001-what-is-sdk.html">📦 SDK 入门</a></li>
+      <li><a href="../reference/sdk-glossary.html">📝 SDK 术语表</a></li>
+    </ul>
+  </div>
+</nav>
+
+<h1>🖥️ 第二课：本地虚拟机搭建 — 零成本部署实验环境</h1>
+<p style="color: var(--text-muted); font-size: 0.95rem;">预计阅读时间：15 分钟 &nbsp;|&nbsp; 难度：入门 ⭐⭐</p>
+
+<div class="card" style="background: #fefce8; border-color: #facc15;">
+  <strong>📋 本课目标：</strong>在自己的 Windows 电脑上搭建一台 Linux 虚拟机，为后续课程准备好一个安全、免费的实验环境。学完这节课，你就能像操作一台云服务器一样在本地虚拟机里练习所有部署操作。
+</div>
+
+<h2><span class="section-num">1</span> 为什么先学本地虚拟机？</h2>
+
+<p>在正式开始部署之前，你需要一个<strong>可以随便折腾</strong>的环境——装错软件、配错防火墙、搞崩系统，都不可怕，因为你可以一键恢复。</p>
+
+<p><strong>本地虚拟机的优势：</strong></p>
+<table class="compare-table">
+  <thead><tr><th>对比项</th><th>本地虚拟机</th><th>云服务器</th></tr></thead>
+  <tbody>
+    <tr><td>💰 费用</td><td>免费（只需电脑配置够）</td><td>每月 50~100 元起步</td></tr>
+    <tr><td>🔄 快照回滚</td><td>一键恢复，随便试错</td><td>需要做镜像/快照（可能收费）</td></tr>
+    <tr><td>🌐 网络</td><td>本地网络，不暴露到公网</td><td>公网 IP，几小时内被扫描</td></tr>
+    <tr><td>📦 模拟生产</td><td>几乎一致（Ubuntu Server）</td><td>真实生产环境</td></tr>
+    <tr><td>⏱ 启动速度</td><td>即时启动</td><td>需要创建实例等待</td></tr>
+  </tbody>
+</table>
+
+<div class="highlight-box">
+  <strong>💡 建议：</strong>先在本机虚拟机里熟练所有操作，再上云服务器。一台虚拟机可以反复"搞坏→恢复"，学习效率远高于直接操作云服务器。
+</div>
+
+<h2><span class="section-num">2</span> 准备工作</h2>
+
+<div class="step-box">
+<h3>2.1 你需要什么</h3>
+<ul style="margin-left:1.5rem;margin-bottom:0.75rem;">
+  <li>一台 Windows 电脑（8GB+ 内存推荐，4GB 也能用）</li>
+  <li>约 20GB 空闲磁盘空间</li>
+  <li>一个终端工具（Windows Terminal 或 PowerShell）</li>
+  <li>一个 SSH 客户端（Windows 10/11 自带 OpenSSH 客户端）</li>
+</ul>
+</div>
+
+<div class="step-box">
+<h3>2.2 虚拟化软件选型</h3>
+<table class="compare-table">
+  <thead><tr><th>软件</th><th>费用</th><th>特点</th></tr></thead>
+  <tbody>
+    <tr><td><strong>VirtualBox</strong></td><td>完全免费 ⭐推荐</td><td>开源、轻量、功能齐全、Windows/Linux/macOS 全平台</td></tr>
+    <tr><td><strong>VMware Workstation Player</strong></td><td>个人免费</td><td>性能略好，界面更现代</td></tr>
+    <tr><td><strong>Hyper-V</strong></td><td>Windows 内置</td><td>Win 10 Pro/Enterprise 自带，性能最好但配置稍复杂</td></tr>
+    <tr><td><strong>WSL2</strong></td><td>免费</td><td>不是完整虚拟机，但适合轻量 Linux 操作，不能完全模拟服务器环境</td></tr>
+  </tbody>
+</table>
+
+<p>本课以 <strong>VirtualBox</strong> 为例，它是零门槛的选择。</p>
+</div>
+
+<h2><span class="section-num">3</span> 第一步：安装 VirtualBox</h2>
+
+<div class="step-box">
+<h3>3.1 下载安装</h3>
+<ol style="margin-left:1.5rem;margin-bottom:0.75rem;">
+  <li>访问 <a href="https://www.virtualbox.org/wiki/Downloads" target="_blank">VirtualBox 官方下载页</a></li>
+  <li>选择 <strong>Windows hosts</strong> 下载安装包</li>
+  <li>双击安装，一路默认选项即可</li>
+  <li>安装过程中如果提示安装网络驱动，选择"是"</li>
+</ol>
+<div class="pitfall">
+  <strong>⚠️ 常见误区：</strong>安装时取消勾选网络驱动。VirtualBox 的网络驱动是虚拟机联网和 SSH 连接的关键，不要跳过。
+</div>
+</div>
+
+<div class="step-box">
+<h3>3.2 下载 Ubuntu Server ISO</h3>
+<p>我们使用 <strong>Ubuntu Server 22.04 LTS</strong>——它没有图形界面，纯命令行操作，和云服务器完全一致。</p>
+<ol style="margin-left:1.5rem;margin-bottom:0.75rem;">
+  <li>访问 <a href="https://ubuntu.com/download/server" target="_blank">Ubuntu Server 下载页</a></li>
+  <li>下载 <strong>Ubuntu Server 22.04 LTS</strong> ISO 文件（约 2GB）</li>
+</ol>
+<div class="highlight-box">
+  <strong>💡</strong> LTS 代表 Long Term Support（长期支持版），官方提供 5 年安全更新。服务器环境永远选 LTS 版本。
+</div>
+</div>
+
+<h2><span class="section-num">4</span> 第二步：创建虚拟机</h2>
+
+<div class="step-box">
+<h3>4.1 VirtualBox 中创建新虚拟机</h3>
+<ol style="margin-left:1.5rem;margin-bottom:0.75rem;">
+  <li>打开 VirtualBox，点击 <strong>"新建"</strong></li>
+  <li>名称：<code>Ubuntu-Server-Learning</code></li>
+  <li>文件夹：默认即可</li>
+  <li>ISO 镜像：选择刚才下载的 Ubuntu Server ISO</li>
+  <li>类型：<strong>Linux</strong>，版本：<strong>Ubuntu (64-bit)</strong></li>
+  <li>内存：分配 <strong>2048 MB</strong>（2GB，如果你的内存充裕可以给 4GB）</li>
+  <li>硬盘：<strong>创建虚拟硬盘</strong>，大小 <strong>20GB</strong>，类型选 VDI（VirtualBox 格式）</li>
+  <li>点击"完成"</li>
+</ol>
+
+<p>创建完成后，先别急着启动——先配置网络：</p>
+<ol style="margin-left:1.5rem;margin-bottom:0.75rem;">
+  <li>选中虚拟机，点击 <strong>"设置"</strong></li>
+  <li>进入 <strong>网络</strong> 选项卡</li>
+  <li>方式选 <strong>NAT</strong>（默认即可）</li>
+  <li>点击 <strong>高级 → 端口转发</strong></li>
+  <li>添加一条规则：</li>
+</ol>
+
+<div class="network-diagram">
+主机端口 → 虚拟机端口<br>
+─────────────────────<br>
+2222    → 22     (SSH)<br>
+8080    → 80     (HTTP)<br>
+8443    → 443    (HTTPS)<br>
+</div>
+
+<div class="cmd-block">
+<code><span class="cmd-comment"># 端口转发配置（在 VirtualBox 设置中填写）</span><br>
+<span class="cmd-comment"># 名称      协议  主机IP  主机端口  虚拟机IP     虚拟机端口</span><br>
+ssh         TCP   0.0.0.0  2222      10.0.2.15   22<br>
+http        TCP   0.0.0.0  8080      10.0.2.15   80<br>
+https       TCP   0.0.0.0  8443      10.0.2.15   443<br>
+</code>
+</div>
+
+<div class="pitfall">
+  <strong>⚠️ 常见误区：</strong>使用 NAT 模式但忘记配端口转发，或者配了转发但主机端口和本地已有服务冲突（比如 80 端口已被本地 IIS 占用）。建议 SSH 用 2222，HTTP 用 8080 避免冲突。<br>
+  <strong>网络模式小贴士：</strong>
+  <ul style="margin-left:1.5rem;margin-top:0.3rem;">
+    <li><strong>NAT</strong> — 虚拟机通过宿主机上网，外部无法直接访问。需要端口转发。适合学习场景。</li>
+    <li><strong>桥接 (Bridged)</strong> — 虚拟机获得局域网独立 IP，和宿主机在同一网段。适合模拟真实网络。</li>
+    <li><strong>Host-Only</strong> — 仅宿主机和虚拟机通信，虚拟机不能上外网。适合完全隔离的环境。</li>
+  </ul>
+</div>
+</div>
+
+<h2><span class="section-num">5</span> 第三步：安装 Ubuntu Server</h2>
+
+<div class="step-box">
+<h3>5.1 启动并安装</h3>
+<ol style="margin-left:1.5rem;margin-bottom:0.75rem;">
+  <li>选中虚拟机，点击 <strong>"启动"</strong></li>
+  <li>虚拟机启动后会进入 Ubuntu 安装界面，选择语言 <strong>English</strong></li>
+  <li>键盘布局：默认即可（或选择 Chinese）</li>
+  <li>网络配置： DHCP 会自动分配 IP，保持默认</li>
+  <li>代理和镜像地址：保持默认（国内用户可以改为 <code>mirrors.ustc.edu.cn</code> 加速下载）</li>
+  <li><strong>磁盘分区：</strong>选择 <strong>Use An Entire Disk</strong>，然后确认</li>
+  <li><strong>用户名和密码：</strong>设置你的用户名（如 <code>ubuntu</code>）和密码（记下来！）</li>
+  <li><strong>SSH 设置：</strong>勾选 <strong>Install OpenSSH server</strong> ← <strong>这一步非常重要！</strong></li>
+  <li>等待安装完成 → 重启</li>
+</ol>
+
+<div class="severity-high" style="background: #fef2f2; border-left: 3px solid var(--danger); padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.92rem; border-radius: 0 var(--radius) var(--radius) 0;">
+  <strong>🔴 千万注意：</strong>Ubuntu Server 安装过程中的 <strong>"Install OpenSSH server"</strong> 选项在 <strong>SSH Setup</strong> 页面，默认是<strong>未勾选</strong>的。如果忘了勾选，装完后的虚拟机没有 SSH 服务，你只能用 VirtualBox 窗口操作，非常不方便。
+</div>
+
+<p>安装完成后重启，看到登录提示符就说明安装成功了：</p>
+<div class="cmd-block">
+<code>ubuntu-server login: <span class="cmd-comment"># 输入你设置的用户名</span><br>
+Password: <span class="cmd-comment"># 输入密码</span><br>
+ubuntu@ubuntu-server:~$ <span class="cmd-comment"># 看到这个提示符就说明成功了</span><br>
+</code>
+</div>
+</div>
+
+<div class="step-box">
+<h3>5.2 验证网络和更新系统</h3>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 查看 IP 地址</span><br>
+ip addr show<br><br>
+<span class="cmd-comment"># 测试联网</span><br>
+ping -c 4 8.8.8.8<br><br>
+<span class="cmd-comment"># 更新系统</span><br>
+sudo apt update && sudo apt upgrade -y<br><br>
+<span class="cmd-comment"># 安装基础工具</span><br>
+sudo apt install -y curl wget git vim net-tools<br>
+</code>
+</div>
+</div>
+
+<h2><span class="section-num">6</span> 第四步：从宿主机 SSH 连接到虚拟机</h2>
+
+<div class="step-box">
+<h3>6.1 连接测试</h3>
+<p>回到 Windows 的终端（PowerShell 或 Terminal），使用端口转发配置的端口连接：</p>
+<div class="cmd-block">
+<code><span class="cmd-comment"># SSH 连接到虚拟机（端口 2222 映射到虚拟机的 22）</span><br>
+ssh -p 2222 ubuntu@127.0.0.1<br><br>
+<span class="cmd-comment"># 第一次连接会提示确认主机指纹，输入 yes</span><br>
+<span class="cmd-comment"># 然后输入你在安装时设置的密码</span><br>
+</code>
+</div>
+
+<p>如果连接成功，你会看到：</p>
+<div class="cmd-block">
+<code>Welcome to Ubuntu 22.04.3 LTS<br>
+ubuntu@ubuntu-server:~$ _
+</code>
+</div>
+
+<p>现在你可以在 Windows 终端里像操作云服务器一样控制虚拟机了——而且完全免费！</p>
+</div>
+
+<div class="step-box">
+<h3>6.2 可选：配置 SSH 密钥登录</h3>
+<p>和云服务器一样，配置密钥登录更方便也更安全：</p>
+<div class="cmd-block">
+<code><span class="cmd-comment"># 在本机生成密钥对（如果没有的话）</span><br>
+ssh-keygen -t ed25519 -C "vm-learning"<br><br>
+<span class="cmd-comment"># 复制公钥到虚拟机</span><br>
+ssh-copy-id -p 2222 ubuntu@127.0.0.1<br><br>
+<span class="cmd-comment"># 或手动追加（如果 ssh-copy-id 不可用）</span><br>
+type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh -p 2222 ubuntu@127.0.0.1 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"<br><br>
+<span class="cmd-comment"># 配置好后，以后登录就不需要密码了</span><br>
+ssh -p 2222 ubuntu@127.0.0.1<br>
+</code>
+</div>
+</div>
+
+<h2><span class="section-num">7</span> 第五步：快照——你的"后悔药"</h2>
+
+<p>快照是虚拟机最强大的功能——它记录了虚拟机的完整状态，你可以随时回到这个状态：</p>
+
+<div class="step-box">
+<h3>7.1 创建快照（安装干净系统后立刻做）</h3>
+<ol style="margin-left:1.5rem;margin-bottom:0.75rem;">
+  <li>关闭虚拟机（在虚拟机中运行 <code>sudo shutdown now</code>）</li>
+  <li>在 VirtualBox 主界面，选中虚拟机 → 点击 <strong>"快照" 按钮</strong>（或 机器 → 生成快照）</li>
+  <li>名称：<code>Clean Install - Base</code></li>
+  <li>描述：刚装完 Ubuntu Server 22.04，已更新系统</li>
+</ol>
+
+<div class="highlight-box">
+  <strong>💡 实战技巧：</strong>每次做一个重要操作之前（比如安装 Docker、配置 Nginx），先创建一个快照。搞砸了只需点一下"恢复快照"，几秒钟回到操作前的状态。<br>
+  推荐快照策略：<br>
+  <strong>① Clean Install</strong> — 刚装完系统<br>
+  <strong>② Before Docker</strong> — 安装 Docker 前<br>
+  <strong>③ Before Nginx</strong> — 配置 Nginx 前<br>
+  <strong>④ Working State</strong> — 一切正常工作时的状态
+</div>
+</div>
+
+<div class="step-box">
+<h3>7.2 恢复快照</h3>
+<ol style="margin-left:1.5rem;margin-bottom:0.75rem;">
+  <li>关闭虚拟机</li>
+  <li>VirtualBox 主界面 → 快照管理</li>
+  <li>选中要恢复的快照 → 点击"恢复"</li>
+  <li>启动虚拟机——回到过去！</li>
+</ol>
+</div>
+
+<h2><span class="section-num">8</span> 进阶：用 Vagrant 实现自动化</h2>
+
+<p>如果你觉得手动安装虚拟机太麻烦，<strong>Vagrant</strong> 可以用一条命令自动完成虚拟机的创建和配置：</p>
+
+<div class="cmd-block">
+<code><span class="cmd-comment"># 安装 Vagrant（从 https://www.vagrantup.com/downloads 下载）</span><br>
+<span class="cmd-comment"># 然后在项目目录创建 Vagrantfile</span><br><br>
+mkdir my-vm && cd my-vm<br>
+vagrant init ubuntu/jammy64<br><br>
+<span class="cmd-comment"># 启动虚拟机（自动下载镜像、配置网络、启动）</span><br>
+vagrant up<br><br>
+<span class="cmd-comment"># SSH 连接</span><br>
+vagrant ssh<br><br>
+<span class="cmd-comment"># 销毁虚拟机</span><br>
+vagrant destroy -f<br>
+</code>
+</div>
+
+<p>Vagrant 在后续课程中可以用来快速创建实验环境，但本课建议先手动装一遍——<strong>亲手装一次能帮你理解虚拟机的每个组成部分</strong>。</p>
+
+<h2><span class="section-num">9</span> 本机操作验证清单</h2>
+
+<div class="card">
+  <p style="font-weight:600;margin-bottom:0.75rem;">✅ 完成以下检查：</p>
+  <ol style="margin-left:1.2rem;">
+    <li>☐ VirtualBox 中虚拟机正常运行</li>
+    <li>☐ 可以从 Windows 用 SSH 连上虚拟机（<code>ssh -p 2222 ubuntu@127.0.0.1</code>）</li>
+    <li>☐ 虚拟机可以上网（<code>ping 8.8.8.8</code>）</li>
+    <li>☐ 系统已更新到最新（<code>sudo apt update && sudo apt upgrade</code>）</li>
+    <li>☐ 基础工具已安装（curl、wget、git、vim、nginx）</li>
+    <li>☐ 已创建 "Clean Install" 快照</li>
+    <li>☐ （可选）配置了 SSH 密钥免密登录</li>
+  </ol>
+</div>
+
+<h2><span class="section-num">10</span> 小测验</h2>
+
+<div class="quiz" id="q1">
+  <p class="quiz-question">Q1: 在 VirtualBox 中使用 NAT 网络模式时，怎样才能从宿主机访问虚拟机里的 Web 服务？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q1',this,'wrong')">不需要任何配置，直接访问虚拟机 IP</button></li>
+    <li><button onclick="check('q1',this,'wrong')">把虚拟机网络改成桥接模式</button></li>
+    <li><button onclick="check('q1',this,'correct')">配置端口转发，将宿主机端口映射到虚拟机的 80 端口</button></li>
+    <li><button onclick="check('q1',this,'wrong')">在虚拟机上安装远程桌面</button></li>
+  </ul>
+  <div id="q1-fb" class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <p class="quiz-question">Q2: 安装 Ubuntu Server 时，最容易忘掉但最重要的步骤是什么？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q2',this,'wrong')">设置时区为 Asia/Shanghai</button></li>
+    <li><button onclick="check('q2',this,'wrong')">选择最小化安装</button></li>
+    <li><button onclick="check('q2',this,'correct')）">勾选 Install OpenSSH server</button></li>
+    <li><button onclick="check('q2',this,'wrong')）">配置 LVM 磁盘加密</button></li>
+  </ul>
+  <div id="q2-fb" class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <p class="quiz-question">Q3: 在做有风险的实验之前，最好的安全措施是什么？</p>
+  <ul class="quiz-options">
+    <li><button onclick="check('q3',this,'wrong')）">相信自己不会出错</button></li>
+    <li><button onclick="check('q3',this,'wrong')）">把命令记下来，出错了再查</button></li>
+    <li><button onclick="check('q3',this,'correct')）">创建一个虚拟机快照，出错了随时恢复</button></li>
+    <li><button onclick="check('q3',this,'wrong')）">在另一个电脑上测试</button></li>
+  </ul>
+  <div id="q3-fb" class="quiz-feedback"></div>
+</div>
+
+<script>
+function check(quizId, btn, result) {
+  const quiz = document.getElementById(quizId);
+  const buttons = quiz.querySelectorAll('button');
+  buttons.forEach(b => { b.classList.add(b === btn ? result : ''); b.disabled = true; });
+  const fb = document.getElementById(quizId + '-fb');
+  const explanations = {
+    'q1': 'NAT 模式下虚拟机在内部网络中，宿主机无法直接访问。必须配置端口转发规则，比如把宿主机 8080 端口映射到虚拟机的 80 端口，然后通过 http://127.0.0.1:8080 访问。',
+    'q2': 'OpenSSH server 选项在 Ubuntu Server 安装的 SSH Setup 页面，默认未勾选。如果忘勾了，装完的系统没有 SSH 服务，只能用 VirtualBox 窗口操作，很麻烦。',
+    'q3': '快照是虚拟机最强大的功能。做实验前创建快照，搞砸了只需点击"恢复"，几秒钟回到之前的状态。建议在系统刚装完时就创建一个干净快照。'
+  };
+  if (result === 'correct') {
+    fb.innerHTML = '✅ 正确！ ' + explanations[quizId];
+    fb.className = 'quiz-feedback correct-fb';
+  } else {
+    fb.innerHTML = '❌ ' + explanations[quizId];
+    fb.className = 'quiz-feedback wrong-fb';
+  }
+}
+</script>
+
+<h2 style="margin-top:2.5rem;">📖 推荐官方文档</h2>
+<ul>
+  <li><a href="https://www.virtualbox.org/manual/" target="_blank">VirtualBox User Manual</a> — VirtualBox 官方手册，网络配置部分必读</li>
+  <li><a href="https://ubuntu.com/server/docs" target="_blank">Ubuntu Server Guide</a> — Ubuntu Server 官方文档</li>
+  <li><a href="https://www.vagrantup.com/docs" target="_blank">Vagrant Documentation</a> — Vagrant 自动化虚拟机工具文档</li>
+  <li><a href="https://help.ubuntu.com/community/SSH/OpenSSH/Configuring" target="_blank">Ubuntu OpenSSH 配置指南</a> — SSH 服务器配置参考</li>
+  <li><a href="https://www.virtualbox.org/manual/ch06.html" target="_blank">VirtualBox 网络设置详解</a> — NAT / Bridged / Host-Only 三种模式详细说明</li>
+</ul>
+
+<h2>📌 下一课预告</h2>
+<div class="card">
+  <strong>第三课：传统云服务器手工部署</strong>
+  <p style="margin:0.5rem 0 0;color:var(--text-muted);">有了本地虚拟机的实验基础，现在可以上手真实的云服务器了——SSH 配置、Nginx 反向代理、HTTPS 证书，一步步走完完整的手工部署流程。</p>
+</div>
+
+<div class="lesson-footer">
+  <p><strong>💬 有问题吗？</strong>安装虚拟机过程中卡在哪个步骤了随时问我——端口转发不通、网络模式搞混、或者 SSD 配置选错了，都正常，直接说。</p>
+  <p style="margin-top:0.5rem;">
+    <a href="../reference/deployment-glossary.html">📝 部署术语表</a> &nbsp;|&nbsp;
+    <a href="0002-deployment-overview.html">← 第一课：部署全景</a> &nbsp;|&nbsp;
+    <a href="0007-local-vm.html">📖 第二课</a>
+  </p>
+</div>
+
+</body>
+</html>

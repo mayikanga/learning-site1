@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第一课：SDK 到底是什么？</title>
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+  .highlight-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius); padding: 1rem 1.25rem; margin: 1rem 0; }
+  .mental-model { text-align: center; padding: 1.5rem; background: var(--card-bg); border: 1px dashed var(--border); border-radius: var(--radius); margin: 1.25rem 0; font-size: 0.92rem; line-height: 2; }
+  .mental-model .box { display: inline-block; border: 2px solid var(--accent); border-radius: var(--radius); padding: 0.5rem 1rem; margin: 0.3rem; background: var(--accent-light); font-weight: 600; }
+  .mental-model .connector { color: var(--text-muted); font-size: 0.85rem; margin: 0 0.15rem; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-header"><a href="../reference/deployment-glossary.html">📖 课程导航</a></div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">网站部署</div>
+    <ul class="sidebar-links">
+      <li><a href="0002-deployment-overview.html">🌐 第1课 部署全景</a></li>
+      <li><a href="0007-local-vm.html">🖥️ 第2课 本地虚拟机</a></li>
+      <li><a href="0003-traditional-deployment.html">🖥️ 第3课 手工部署</a></li>
+      <li><a href="0004-docker-deployment.html">🐳 第4课 Docker</a></li>
+      <li><a href="0005-cicd-automation.html">⚙️ 第5课 CI/CD</a></li>
+      <li><a href="0006-production-security.html">🔒 第6课 安全运维</a></li>
+    </ul>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">参考 &amp; 旧课</div>
+    <ul class="sidebar-links">
+      <li><a href="../reference/deployment-glossary.html">📝 部署术语表</a></li>
+      <li><a href="0001-what-is-sdk.html" class="active">📦 SDK 入门</a></li>
+      <li><a href="../reference/sdk-glossary.html">📝 SDK 术语表</a></li>
+    </ul>
+  </div>
+</nav>
+
+<h1>📦 第一课：SDK 到底是什么？</h1>
+<p style="color: var(--text-muted); font-size: 0.95rem;">预计阅读时间：8 分钟 &nbsp;|&nbsp; 难度：入门</p>
+
+<h2><span class="section-num">1</span> 先别急，想一个问题</h2>
+
+<p>假设你开了一家餐馆。有一天你想接入 <strong>外卖平台</strong>——让客人能在手机上点你的菜，骑士来取餐送走。</p>
+
+<p>外卖平台给了你一份 200 页的 PDF，里面写满了各种接口规范、加密算法、回调地址、错误码……你翻了两页就头大了。</p>
+
+<p>这时候外卖平台跟你说：<strong>"别怕，我这有个工具包，你往你的收银系统里一装，几行代码就搞定了。"</strong></p>
+
+<p>这个工具包，就是 <strong>SDK</strong>。</p>
+
+<div class="definition">
+  <strong>SDK</strong>（Software Development Kit，软件开发工具包）是一套<strong>帮你快速接入某个平台或服务的工具箱</strong>。它把复杂的底层细节封装起来，暴露给你简单、清晰的调用方式。
+</div>
+
+<h2><span class="section-num">2</span> 一个心智模型：积木 vs 蓝图</h2>
+
+<p>理解下面这个关系，你就掌握了这节课 80% 的核心：</p>
+
+<div class="mental-model">
+  <div>
+    <span class="box">你的 App</span>
+    <span class="connector">← 调用 →</span>
+    <span class="box">SDK（工具箱）</span>
+    <span class="connector">← 内部调用 →</span>
+    <span class="box">API（服务端）</span>
+  </div>
+  <p style="margin-top: 0.75rem; color: var(--text-muted);">SDK 是中间的"翻译官"，你的代码只需跟 SDK 对话，SDK 帮你搞定剩下的一切。</p>
+</div>
+
+<p>换个生活类比：</p>
+
+<div class="analogy">
+  <strong>🧩 乐高积木 vs 乐高说明书</strong><br><br>
+  <strong>API</strong> = 乐高公司告诉你每个积木块的规格（长 2cm、有 8 个凸点、承重 50g）<br>
+  <strong>SDK</strong> = 乐高给你一盒套装，里面有分好类的积木 + 搭建说明书 + 一个拆件器<br><br>
+  你不会想从零开始研究积木规格再拼一艘千年隼——你会直接买套装，跟着说明书拼。SDK 就是那个套装。
+</div>
+
+<h2><span class="section-num">3</span> 四个容易搞混的概念</h2>
+
+<table class="compare-table">
+  <thead>
+    <tr><th>概念</th><th>是什么</th><th>谁控制节奏</th><th>类比</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>API</strong></td>
+      <td>两个软件之间通信的<em>接口规范</em></td>
+      <td>服务端定规则，客户端遵守</td>
+      <td>餐厅菜单——告诉你有什么菜、怎么点</td>
+    </tr>
+    <tr>
+      <td><strong>SDK</strong></td>
+      <td>接入某个平台/服务的<em>全套工具箱</em></td>
+      <td>你调用 SDK，SDK 调用 API</td>
+      <td>外卖平台给你的收银插件——装好就能接单</td>
+    </tr>
+    <tr>
+      <td><strong>Library</strong></td>
+      <td>解决<em>某一类问题</em>的代码集合</td>
+      <td>你调用库函数，库给你结果</td>
+      <td>计算器——你按按钮，它给答案</td>
+    </tr>
+    <tr>
+      <td><strong>Framework</strong></td>
+      <td>定义好<em>骨架和规则</em>的应用程序框架</td>
+      <td><strong>框架调用你</strong>（控制反转）</td>
+      <td>宜家厨房系统——你只能在规定尺寸里填东西</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="highlight-box">
+  <strong>💡 关键区别：</strong>Library 和 SDK 都是<em>你调用它</em>，但 SDK 的范围更大、通常针对特定平台。Framework 是<em>它调用你</em>——你把代码填进框架预留的槽位里。
+</div>
+
+<h2><span class="section-num">4</span> 拆开一个 SDK，里面通常有什么？</h2>
+
+<p>虽然不是每个 SDK 都有下面全部东西，但大部分 SDK 的结构都差不多：</p>
+
+<div class="card">
+  <table style="width:100%;font-size:0.92rem;">
+    <tr><td style="width:2rem;">📚</td><td><strong>代码库 (Libraries)</strong></td><td style="color:var(--text-muted)">封装好的函数和类，你直接调用</td></tr>
+    <tr><td style="width:2rem;">🛠️</td><td><strong>工具 (Tools)</strong></td><td style="color:var(--text-muted)">命令行工具、调试器、模拟器</td></tr>
+    <tr><td style="width:2rem;">📖</td><td><strong>文档 (Docs)</strong></td><td style="color:var(--text-muted)">API 参考、快速入门指南、FAQ</td></tr>
+    <tr><td style="width:2rem;">🧪</td><td><strong>示例代码 (Samples)</strong></td><td style="color:var(--text-muted)">可运行的 Demo，告诉你"标准用法"</td></tr>
+    <tr><td style="width:2rem;">⚙️</td><td><strong>运行时/依赖</strong></td><td style="color:var(--text-muted)">SDK 运行所需的底层环境</td></tr>
+  </table>
+</div>
+
+<p>举个例子——<strong>微信支付 SDK</strong>：</p>
+<ul style="margin-left:1.5rem;margin-bottom:1rem;">
+  <li>你调用 <code>wxpay.order({...})</code> 就创建了一个支付订单</li>
+  <li>SDK 内部帮你处理了签名加密、网络请求、错误重试</li>
+  <li>如果 SDK 不存在，你得自己看几百页的《微信支付 API 文档》手写这些逻辑</li>
+</ul>
+
+<h2><span class="section-num">5</span> 小测验</h2>
+
+<div class="quiz" id="q1">
+  <p class="quiz-question">Q1: 你开发一个 App，想用某云服务的人脸识别功能。你应该优先找什么？</p>
+  <ul class="quiz-options">
+    <li><button onclick="checkQ1(this, 'wrong')">该云服务的《API 接口规范》PDF</button></li>
+    <li><button onclick="checkQ1(this, 'correct')">该云服务的人脸识别 SDK</button></li>
+    <li><button onclick="checkQ1(this, 'wrong')">自己逆向工程抓包分析</button></li>
+    <li><button onclick="checkQ1(this, 'wrong')">在 Stack Overflow 上发帖问</button></li>
+  </ul>
+  <div id="q1-fb" class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q2" style="display:none;">
+  <p class="quiz-question">Q2: 下面哪个描述最准确地抓住了 SDK 和 Framework 的核心区别？</p>
+  <ul class="quiz-options">
+    <li><button onclick="checkQ2(this, 'wrong')">SDK 是免费的，Framework 要付费</button></li>
+    <li><button onclick="checkQ2(this, 'wrong')">SDK 比 Framework 大</button></li>
+    <li><button onclick="checkQ2(this, 'correct')">你调用 SDK，Framework 调用你（控制反转）</button></li>
+    <li><button onclick="checkQ2(this, 'wrong')">SDK 只能用于手机 App</button></li>
+  </ul>
+  <div id="q2-fb" class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q3" style="display:none;">
+  <p class="quiz-question">Q3: SDK 通常不包含下面哪个东西？</p>
+  <ul class="quiz-options">
+    <li><button onclick="checkQ3(this, 'wrong')">封装好的代码库</button></li>
+    <li><button onclick="checkQ3(this, 'wrong')">文档和示例代码</button></li>
+    <li><button onclick="checkQ3(this, 'correct')">你 App 的业务逻辑代码</button></li>
+    <li><button onclick="checkQ3(this, 'wrong')">调试和辅助工具</button></li>
+  </ul>
+  <div id="q3-fb" class="quiz-feedback"></div>
+</div>
+
+<script>
+function markButtons(quizId, pickedBtn, className) {
+  const quiz = document.getElementById(quizId);
+  const buttons = quiz.querySelectorAll('button');
+  buttons.forEach(b => { b.classList.add(b === pickedBtn ? className : ''); b.disabled = true; });
+}
+
+function showNext(currentQ, nextQ) {
+  setTimeout(() => {
+    const el = document.getElementById(nextQ);
+    if (el) el.style.display = 'block';
+  }, 600);
+}
+
+function checkQ1(btn, result) {
+  markButtons('q1', btn, result);
+  const fb = document.getElementById('q1-fb');
+  if (result === 'correct') {
+    fb.textContent = '✅ 正确！SDK 就是干这个的——官方提供的现成工具包，让你少看几百页文档。';
+    fb.className = 'quiz-feedback correct-fb';
+  } else {
+    fb.textContent = '❌ 应该优先找 SDK。云服务通常会提供 SDK 把 API 封装好，只有实在没有 SDK 时才不得不自己看 API 文档手写调用。';
+    fb.className = 'quiz-feedback wrong-fb';
+  }
+  showNext('q1', 'q2');
+}
+
+function checkQ2(btn, result) {
+  markButtons('q2', btn, result);
+  const fb = document.getElementById('q2-fb');
+  if (result === 'correct') {
+    fb.textContent = '✅ 没错！"你调用 SDK，Framework 调用你"——控制反转是 Framework 最核心的特征。';
+    fb.className = 'quiz-feedback correct-fb';
+  } else {
+    fb.textContent = '❌ 核心区别是控制权。SDK 是你调它，Framework（如 React、Spring）是它调你——你把代码填入框架预定的模板。';
+    fb.className = 'quiz-feedback wrong-fb';
+  }
+  showNext('q2', 'q3');
+}
+
+function checkQ3(btn, result) {
+  markButtons('q3', btn, result);
+  const fb = document.getElementById('q3-fb');
+  if (result === 'correct') {
+    fb.textContent = '✅ 正确！SDK 提供的是工具和封装，不包含你 App 自己的业务逻辑。业务逻辑是你写的。';
+    fb.className = 'quiz-feedback correct-fb';
+  } else {
+    fb.textContent = '❌ SDK 不包含你的业务逻辑代码。你 App 的业务逻辑是你自己写的，SDK 只是提供了工具让你更方便地实现它们。';
+    fb.className = 'quiz-feedback wrong-fb';
+  }
+}
+</script>
+
+<h2 style="margin-top:2.5rem;">📖 推荐延伸阅读</h2>
+<ul>
+  <li><a href="https://clevertap.com/blog/what-is-an-sdk/" target="_blank">What is an SDK? Everything You Need to Know</a> — CleverTap 的通俗入门文章</li>
+  <li><a href="https://www.freecodecamp.org/news/sdk-vs-api-vs-library-vs-framework/" target="_blank">SDK vs API vs Library vs Framework</a> — freeCodeCamp 的概念辨析</li>
+</ul>
+
+<h2>🔜 下一课预告</h2>
+<div class="card">
+  <strong>第二课：API——SDK 背后那个"真正干活的人"</strong>
+  <p style="margin:0.5rem 0 0;color:var(--text-muted);">SDK 是工具箱，但工具箱里的工具到底在跟谁说话？下一节课我们深入 API，理解"软件之间如何交流"。</p>
+</div>
+
+<div class="lesson-footer">
+  <p><strong>💬 有问题吗？</strong>直接在这个对话里问我——任何概念不明白、想深入了解的方向、或者觉得哪里讲得不够清楚，都可以告诉我。</p>
+  <p style="margin-top:0.5rem;">
+    <a href="../reference/sdk-glossary.html" style="color: var(--text-muted);">📝 SDK 术语表</a> &nbsp;|&nbsp;
+    <a href="0001-what-is-sdk.html" style="color: var(--text-muted);">📖 第一课</a>
+  </p>
+</div>
+
+</body>
+</html>

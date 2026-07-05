@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>网站部署术语表</title>
+<link rel="stylesheet" href="../assets/base.css">
+<style>
+  dt { font-weight: 600; margin-top: 1.2rem; font-size: 1.05rem; }
+  dd { margin-left: 0; color: var(--text-muted); font-size: 0.92rem; margin-top: 0.3rem; }
+  .tag-cat { display: inline-block; font-size: 0.72rem; padding: 0.1em 0.5em; border-radius: 99px; background: var(--accent-light); color: var(--accent); margin-right: 0.5rem; font-weight: 500; }
+  h2 { margin-top: 2.5rem; }
+  .see-also { font-size: 0.85rem; color: var(--accent); margin-top: 0.2rem; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-header"><a href="deployment-glossary.html">📖 课程导航</a></div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">网站部署</div>
+    <ul class="sidebar-links">
+      <li><a href="../lessons/0002-deployment-overview.html">🌐 第1课 部署全景</a></li>
+      <li><a href="../lessons/0007-local-vm.html">🖥️ 第2课 本地虚拟机</a></li>
+      <li><a href="../lessons/0003-traditional-deployment.html">🖥️ 第3课 手工部署</a></li>
+      <li><a href="../lessons/0004-docker-deployment.html">🐳 第4课 Docker</a></li>
+      <li><a href="../lessons/0005-cicd-automation.html">⚙️ 第5课 CI/CD</a></li>
+      <li><a href="../lessons/0006-production-security.html">🔒 第6课 安全运维</a></li>
+    </ul>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">参考 &amp; 旧课</div>
+    <ul class="sidebar-links">
+      <li><a href="deployment-glossary.html" class="active">📝 部署术语表</a></li>
+      <li><a href="../lessons/0001-what-is-sdk.html">📦 SDK 入门</a></li>
+      <li><a href="sdk-glossary.html">📝 SDK 术语表</a></li>
+    </ul>
+  </div>
+</nav>
+
+<h1>🌐 网站部署术语表</h1>
+<p style="color: var(--text-muted);">随课程进度持续更新。术语仅在理解后收录。</p>
+
+<h2>基础概念</h2>
+
+<dl>
+  <dt><span class="tag-cat">网络</span>DNS（Domain Name System）</dt>
+  <dd>域名解析系统，将人类可读的域名（如 <code>example.com</code>）转换为机器可读的 IP 地址。核心记录类型：A（域名→IPv4）、AAAA（域名→IPv6）、CNAME（域名→另一个域名）、MX（邮件路由）。<br>
+  <a href="https://www.cloudflare.com/learning/dns/what-is-dns/" target="_blank" class="see-also">Cloudflare DNS 详解 →</a></dd>
+
+  <dt><span class="tag-cat">网络</span>A 记录 / AAAA 记录</dt>
+  <dd>A 记录将域名指向一个 IPv4 地址；AAAA 记录指向 IPv6 地址。这是最基础的 DNS 记录类型——告诉浏览器"这个域名对应哪台服务器"。</dd>
+
+  <dt><span class="tag-cat">网络</span>CNAME 记录</dt>
+  <dd>将一个域名<strong>别名</strong>到另一个域名。如 <code>www.example.com</code> → <code>example.com</code>。CNAME 不能与 MX 等其他记录共存于同一名称。</dd>
+
+  <dt><span class="tag-cat">网络</span>反向代理（Reverse Proxy）</dt>
+  <dd>服务器端代理——接收客户端请求，转发给后端服务，再将响应返回客户端。Nginx 最常见的用途之一。可实现负载均衡、缓存、SSL 卸载等。<br>
+  <a href="https://nginx.org/en/docs/http/ngx_http_proxy_module.html" target="_blank" class="see-also">Nginx 反向代理文档 →</a></dd>
+
+  <dt><span class="tag-cat">网络</span>端口（Port）</dt>
+  <dd>计算机上不同网络服务的"门牌号"。常见端口：22（SSH）、80（HTTP）、443（HTTPS）、3306（MySQL）、5432（PostgreSQL）、6379（Redis）。防火墙通过控制端口来放行或阻止流量。</dd>
+
+  <dt><span class="tag-cat">协议</span>HTTP / HTTPS</dt>
+  <dd>超文本传输协议，客户端与服务器通信的规则。HTTPS = HTTP + SSL/TLS 加密。现代网站必须使用 HTTPS，否则浏览器会标记为"不安全"。</dd>
+
+  <dt><span class="tag-cat">协议</span>SSL / TLS</dt>
+  <dd>传输层安全协议，为网络通信提供加密和身份验证。SSL 是旧称（已废弃），TLS 是标准协议。日常仍混用"SSL 证书"这个说法，实际都是 TLS 证书。</dd>
+
+  <dt><span class="tag-cat">协议</span>SNI（Server Name Indication）</dt>
+  <dd>TLS 扩展，允许在同一个 IP 和端口上托管多个 HTTPS 站点。Nginx 通过 <code>server_name</code> 指令配合 SNI 实现多站点共用一个 IP。</dd>
+</dl>
+
+<h2>部署方式</h2>
+
+<dl>
+  <dt><span class="tag-cat">部署</span>裸机部署（Bare Metal）</dt>
+  <dd>直接在物理服务器上部署应用，不经过虚拟化层。性能最好，但管理和扩展最复杂。小团队通常从云服务器（等同于虚拟裸机）开始。</dd>
+
+  <dt><span class="tag-cat">部署</span>容器化（Containerization）</dt>
+  <dd>将应用及其依赖打包在一个标准化的容器中运行。与虚拟机不同，容器共享宿主机内核，启动快、资源占用小。Docker 是目前最主流的容器引擎。</dd>
+
+  <dt><span class="tag-cat">部署</span>CI / CD</dt>
+  <dd>持续集成（Continuous Integration）和持续部署/交付（Continuous Deployment/Delivery）。CI 指频繁合并代码并自动构建测试；CD 指将通过测试的代码自动部署到生产环境。</dd>
+
+  <dt><span class="tag-cat">部署</span>蓝绿部署（Blue-Green Deployment）</dt>
+  <dd>维护两套相同的生产环境（蓝/绿），一套运行当前版本，一套部署新版本。测试通过后切换流量，实现零停机发布。</dd>
+
+  <dt><span class="tag-cat">部署</span>PaaS（Platform as a Service）</dt>
+  <dd>平台即服务——不需要管理服务器和操作系统，只需把代码推上去，平台自动运行。典型例子：Heroku、Vercel、Railway。</dd>
+</dl>
+
+<h2>工具与组件</h2>
+
+<dl>
+  <dt><span class="tag-cat">服务</span>Nginx</dt>
+  <dd>高性能 Web 服务器和反向代理服务器。以其高并发能力、低内存占用、灵活的配置而成为部署中最常用的 Web 服务器。<br>
+  <a href="https://nginx.org/en/docs/" target="_blank" class="see-also">Nginx 官方文档 →</a></dd>
+
+  <dt><span class="tag-cat">工具</span>Docker</dt>
+  <dd>容器引擎，将应用及其依赖打包为可移植的镜像。Dockerfile 定义构建过程，Docker Compose 定义多容器编排。<br>
+  <a href="https://docs.docker.com/" target="_blank" class="see-also">Docker 官方文档 →</a></dd>
+
+  <dt><span class="tag-cat">工具</span>Docker Compose</dt>
+  <dd>用 YAML 文件定义和运行多容器 Docker 应用的工具。一条 <code>docker compose up</code> 命令即可启动整个服务栈。</dd>
+
+  <dt><span class="tag-cat">工具</span>Systemd</dt>
+  <dd>Linux 的系统和服务管理器。几乎所有现代 Linux 发行版都用它来管理进程。通过 <code>.service</code> 单元文件定义应用如何启动、重启、记录日志。</dd>
+
+  <dt><span class="tag-cat">工具</span>PM2</dt>
+  <dd>Node.js 进程管理器，提供进程守护、负载均衡、自动重启、日志管理等功能。适合 Node.js 应用的生产环境部署。</dd>
+
+  <dt><span class="tag-cat">工具</span>UFW（Uncomplicated Firewall）</dt>
+  <dd>Ubuntu 内置的防火墙管理工具，基于 iptables 的简化前端。<code>ufw allow 80/tcp</code> 一行命令即可放行 HTTP 流量。<br>
+  <a href="https://help.ubuntu.com/community/UFW" target="_blank" class="see-also">UFW 文档 →</a></dd>
+
+  <dt><span class="tag-cat">工具</span>GitHub Actions</dt>
+  <dd>GitHub 内建的 CI/CD 平台。通过在仓库中放置 <code>.github/workflows/*.yml</code> 文件定义自动化流水线。<br>
+  <a href="https://docs.github.com/en/actions" target="_blank" class="see-also">GitHub Actions 文档 →</a></dd>
+
+  <dt><span class="tag-cat">工具</span>Certbot</dt>
+  <dd>Let's Encrypt 的官方客户端，自动化获取和续期 SSL 证书。一条命令即可为 Nginx 配置 HTTPS。<br>
+  <a href="https://certbot.eff.org/" target="_blank" class="see-also">Certbot 官网 →</a></dd>
+
+  <dt><span class="tag-cat">工具</span>Fail2ban</dt>
+  <dd>入侵防御工具，监控日志文件中的恶意行为（如反复失败的 SSH 登录），自动封禁攻击者 IP。</dd>
+</dl>
+
+<h2>安全概念</h2>
+
+<dl>
+  <dt><span class="tag-cat">安全</span>SSH 密钥对</dt>
+  <dd>公钥加密的登录方式，比密码更安全。用户持有私钥（<code>~/.ssh/id_rsa</code>），服务器存储公钥（<code>~/.ssh/authorized_keys</code>）。连接时用私钥签名验证身份。</dd>
+
+  <dt><span class="tag-cat">安全</span>安全组（Security Group）</dt>
+  <dd>云服务商提供的虚拟防火墙。在实例级别控制入站和出站流量。配置规则如"只允许我的 IP 访问 22 端口"。<br>
+  <a href="https://help.aliyun.com/document_detail/25471.html" target="_blank" class="see-also">阿里云安全组文档 →</a></dd>
+
+  <dt><span class="tag-cat">安全</span>HSTS（HTTP Strict Transport Security）</dt>
+  <dd>告诉浏览器：以后只能通过 HTTPS 访问这个网站，即使你输入了 <code>http://</code> 也要自动升级。防止 SSL Strip 攻击。</dd>
+
+  <dt><span class="tag-cat">安全</span>OCSP Stapling</dt>
+  <dd>Web 服务器主动从 CA 获取证书吊销状态并"订书钉"到 TLS 握手响应中，避免客户端自己去查，提升 HTTPS 性能同时保护隐私。</dd>
+
+  <dt><span class="tag-cat">安全</span>备份策略（3-2-1 原则）</dt>
+  <dd>行业标准备份策略：保留 <strong>3</strong> 份数据副本，存储在 <strong>2</strong> 种不同的介质上，其中 <strong>1</strong> 份放在异地。确保任何单一故障都不会导致数据丢失。</dd>
+</dl>
+
+<h2>网络状态码速查</h2>
+
+<table class="compare-table">
+  <thead><tr><th>状态码</th><th>含义</th><th>部署中常见原因</th></tr></thead>
+  <tbody>
+    <tr><td><strong>200</strong></td><td>OK — 请求成功</td><td>一切正常</td></tr>
+    <tr><td><strong>301/302</strong></td><td>重定向</td><td>HTTP→HTTPS 跳转、域名跳转</td></tr>
+    <tr><td><strong>403</strong></td><td>Forbidden — 禁止访问</td><td>防火墙拦截、目录权限错误、Nginx deny 规则</td></tr>
+    <tr><td><strong>404</strong></td><td>Not Found — 找不到资源</td><td>文件路径不对、反向代理后端未启动</td></tr>
+    <tr><td><strong>502</strong></td><td>Bad Gateway — 网关错误</td><td>上游后端未运行、端口写错、防火墙拦了后端端口</td></tr>
+    <tr><td><strong>503</strong></td><td>Service Unavailable</td><td>服务过载、维护中、Docker 容器挂了</td></tr>
+    <tr><td><strong>504</strong></td><td>Gateway Timeout</td><td>后端响应超时、数据库慢查询</td></tr>
+  </tbody>
+</table>
+
+<div class="lesson-footer">
+  <p>最后更新：2026-07-05 &nbsp;|&nbsp; 术语表会在课程推进中持续补充</p>
+</div>
+
+</body>
+</html>
